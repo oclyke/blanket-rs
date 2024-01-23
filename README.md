@@ -1,0 +1,2 @@
+# wimshurst
+static generator

@@ -1,0 +1,16 @@
+[package]
+name = "wimshurst"
+description = "Static generator"
+repository = "https://github.com/oclyke/wimshurst"
+readme = "README.md"
+keywords = ["static", "site", "generator"]
+categories = ["web-programming", "compilers"]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+topologic = "1.1.0"
