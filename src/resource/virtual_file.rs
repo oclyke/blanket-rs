@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 use crate::builder::{Build, Builder, Dependency};
 
-#[derive(Debug)]
 pub struct VirtualFile {
     path: PathBuf,
     content: Option<String>,
@@ -22,7 +21,7 @@ impl VirtualFile {
     }
 }
 
-impl std::fmt::Display for VirtualFile {
+impl std::fmt::Debug for VirtualFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,

@@ -3,10 +3,9 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-#[derive(Debug)]
 pub struct Root {}
 
-impl std::fmt::Display for Root {
+impl std::fmt::Debug for Root {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "--root--")
     }

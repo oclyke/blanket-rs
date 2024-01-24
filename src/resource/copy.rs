@@ -22,20 +22,6 @@ impl CopyFile {
     }
 }
 
-impl std::fmt::Display for CopyFile {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {{ path: {:?} }}",
-            std::any::type_name::<Self>()
-                .split("::")
-                .last()
-                .unwrap_or("UnknownType"),
-            self.path
-        )
-    }
-}
-
 impl PartialEq for CopyFile {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path

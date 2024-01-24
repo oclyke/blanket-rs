@@ -18,20 +18,6 @@ impl Directory {
     }
 }
 
-impl std::fmt::Display for Directory {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {{ path: {:?} }}",
-            std::any::type_name::<Self>()
-                .split("::")
-                .last()
-                .unwrap_or("UnknownType"),
-            self.path
-        )
-    }
-}
-
 impl PartialEq for Directory {
     fn eq(&self, other: &Self) -> bool {
         self.path == other.path
