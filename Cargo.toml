@@ -5,7 +5,7 @@ repository = "https://github.com/oclyke/wimshurst"
 readme = "README.md"
 keywords = ["static", "site", "generator"]
 categories = ["web-programming", "compilers"]
-version = "0.0.0"
+version = "0.1.0"
 edition = "2021"
 license = "MIT"
 
