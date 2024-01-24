@@ -1,4 +1,4 @@
-# wimshurst
+# wimhrst
 static generator
 
 to get started try the example: `cargo run --example basic`

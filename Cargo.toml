@@ -1,7 +1,7 @@
 [package]
-name = "wimshurst"
+name = "wimhrst"
 description = "Static generator"
-repository = "https://github.com/oclyke/wimshurst"
+repository = "https://github.com/oclyke/wimhrst"
 readme = "README.md"
 keywords = ["static", "site", "generator"]
 categories = ["web-programming", "compilers"]
