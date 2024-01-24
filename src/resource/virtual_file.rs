@@ -57,9 +57,8 @@ impl Build for VirtualFile {
         self,
         builder: &mut Builder,
     ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
-        let path = self.path.clone();
         let dependency = builder.make_dependency(self)?;
-        Ok((Some(path), dependency, vec![]))
+        Ok((None, dependency, vec![]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let VirtualFile { path, .. } = self;
