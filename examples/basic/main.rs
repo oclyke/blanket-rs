@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use wimshurst::{
+use wimhrst::{
     builder::{Build, Builder, Dependency},
     resource::{CopyFile, Root},
 };
@@ -45,6 +45,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     builder.require(CopyFile::new(
         source.join("style.css"),
         output.join("style.css"),
+    ))?;
+    builder.require(CopyFile::new(
+        source.join("reset.css"),
+        output.join("reset.css"),
     ))?;
 
     builder.generate()?;
