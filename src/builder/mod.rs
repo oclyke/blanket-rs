@@ -139,8 +139,10 @@ impl Builder {
         }
 
         // generate the site
+        println!("\ngenerating site:");
         for layer in &layers {
             for node in layer {
+                println!("generating {}", node);
                 node.resource().borrow_mut().generate()?;
             }
         }
