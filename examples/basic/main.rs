@@ -9,7 +9,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use wimhrst::{
+use blanket_rs::{
     builder::{Build, Builder, Dependency},
     resource::{CopyFile, Root},
 };

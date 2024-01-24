@@ -1,7 +1,7 @@
 [package]
-name = "wimhrst"
+name = "blanket-rs"
 description = "Static generator"
-repository = "https://github.com/oclyke/wimhrst"
+repository = "https://github.com/oclyke/blanket-rs"
 readme = "README.md"
 keywords = ["static", "site", "generator"]
 categories = ["web-programming", "compilers"]
@@ -9,7 +9,7 @@ version = "0.1.1"
 edition = "2021"
 license = "MIT"
 exclude = [
-    "examples/wimhrst.net/**/*",
+    "examples/blanket-rs-net/**/*",
 ]
 
 [[example]]
