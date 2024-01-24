@@ -5,11 +5,11 @@ repository = "https://github.com/oclyke/wimhrst"
 readme = "README.md"
 keywords = ["static", "site", "generator"]
 categories = ["web-programming", "compilers"]
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 license = "MIT"
 exclude = [
-    "examples/wimhrst.net/**/*",
+    "examples/wimhrst-net/**/*",
 ]
 
 [[example]]
