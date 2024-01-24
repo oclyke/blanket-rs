@@ -28,7 +28,7 @@
 
 /* link styles */
 a:link { color: var(--a); text-decoration: none; }
-a:visited { color: var(--fg); text-decoration-color: var(--a-vis); }
+a:visited { color: var(--a-act); text-decoration-color: var(--a-vis); }
 a:hover { text-decoration-color: var(--a); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.1rem; }
 a:after { font-size: 0.6rem; vertical-align: super; }
 
