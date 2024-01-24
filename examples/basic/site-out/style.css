@@ -1,0 +1,113 @@
+@import "/reset.css";
+
+:root {
+	color-scheme: light dark;
+    height: 100vh;
+
+	--width: 80rem;
+	--text-width: 60rem;
+
+	--mono-face: ui-monospace, Menlo, Consolas, monospace;
+	--text-face: -apple-system, system-ui, Input, 'Inter', sans-serif;
+
+	--bg: #fff; --fg: #111; --fg-faint: #777;
+	--target-bg: #f0f0f0;
+	--a: #53a9a9; --a-hov: #53a9a9; --a-act: #666;
+}
+
+@media (prefers-color-scheme: dark) {
+	:root {
+		--bg: #181818; --fg: #eee; --fg-faint: #bbb;
+		--target-bg: #141414;
+		--a: #42b5ff; --a-hov: #62b3ff; --a-vis: #ca76ff; --a-act: white;
+		--code-fg: #ddd; --code-bg: #282828;
+		--figcaption: #bbb;
+		--time: #bbb;
+	}
+}
+
+/* link styles */
+a:link { color: var(--a); text-decoration: none; }
+a:visited { color: var(--fg); text-decoration-color: var(--a-vis); }
+a:hover { text-decoration-color: var(--a); text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 0.1rem; }
+a:after { font-size: 0.6rem; vertical-align: super; }
+
+body {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+	background: var(--bg);
+	color: var(--fg);
+	line-height: 1.45;
+	font-family: var(--text-face);
+	text-rendering: optimizeLegibility;
+	font-variant-ligatures: common-ligatures;
+}
+
+div {
+    display: flex;
+    flex-direction: column;
+}
+
+/* site title */
+header > h1 {
+    padding-left: 1rem;
+    font-size: 2.625rem;
+    font-style: normal;
+    font-weight: 100;
+}
+
+article {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 1rem;
+    height: 18rem;
+}
+
+/* indent freedom and content further */
+article > #hook > #freedom, article > #content {
+    padding-left: 1rem;
+}
+
+/* spacing for short screens */
+article > #content {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+footer {
+    position: relative;
+    display: flex;
+    flex-grow: 1;
+}
+
+footer > img {    
+    width: 18rem;
+    height: 18rem;
+}
+
+footer > #yellow {
+    background-color: #EDCF2F;
+    position: absolute;
+    height: 5rem;
+    width: 100%;
+    top: 3rem;
+    z-index: -2;
+}
+
+footer > #orange {
+    background-color: #FF9D42;;
+    position: absolute;
+    width: 5rem;
+    height: 100%;
+    top: 0rem;
+    left: 10rem;
+    z-index: -1;
+}
+
+@media(max-width: 600px) {
+    footer {
+        flex-direction: column;
+    }
+}
