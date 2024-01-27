@@ -11,6 +11,11 @@ use crate::resource::Root;
 
 pub use dependency::Dependency;
 
+pub enum Registration {
+    Virtual(Dependency),
+    Concrete(Dependency, PathBuf),
+}
+
 /// A resource that can be built.
 pub trait Build: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
@@ -32,7 +37,7 @@ pub trait Build: std::fmt::Debug {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>>;
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>>;
 
     /// Generates the resource.
     /// This function will be called after the `generate` method of all the resources
@@ -82,33 +87,31 @@ impl Builder {
         &mut self,
         resource: T,
     ) -> Result<Dependency, Box<dyn std::error::Error>> {
-        let (path, dependent, dependencies) = resource.register(self)?;
-        let mut dependency = dependent.clone();
-
-        // register all dependencies
+        let (registration, dependencies) = resource.register(self)?;
+        let dependent = match registration {
+            Registration::Virtual(dep) => dep,
+            Registration::Concrete(dep, path) => {
+                match self.output.get(&path) {
+                    Some(existing) => {
+                        if !existing.resource().borrow().equals(dep.resource()) {
+                            println!("path: {:?}", path);
+                            println!("existing: {}", existing);
+                            println!("dependent: {}", dep);
+                            return Err("output already exists with different data".into());
+                        }
+                    }
+                    None => {
+                        self.output.insert(path, dep.clone());
+                    }
+                };
+                dep
+            }
+        };
         for dependency in dependencies {
             self.add_dependency(dependent.clone(), dependency)?;
         }
 
-        // concrete resources are registered in the output
-        if let Some(path) = path {
-            match self.output.get(&path) {
-                Some(existing) => {
-                    dependency = existing.clone();
-                    if !existing.resource().borrow().equals(dependent.resource()) {
-                        println!("path: {:?}", path);
-                        println!("existing: {}", existing);
-                        println!("dependent: {}", dependent);
-                        return Err("output already exists with different data".into());
-                    }
-                }
-                None => {
-                    self.output.insert(path, dependent.clone());
-                }
-            }
-        }
-
-        Ok(dependency)
+        Ok(dependent)
     }
 
     pub fn generate(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -208,11 +211,14 @@ mod tests {
         fn register(
             self,
             builder: &mut Builder,
-        ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>>
-        {
+        ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
             let path = self.path.clone();
             let dependency = builder.make_dependency(self)?;
-            Ok((path, dependency.clone(), vec![]))
+            let registration = match path {
+                Some(path) => Registration::Concrete(dependency.clone(), path),
+                None => Registration::Virtual(dependency.clone()),
+            };
+            Ok((registration, vec![]))
         }
 
         fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
