@@ -85,7 +85,12 @@ impl Builder {
         let (path, dependent, dependencies) = resource.register(self)?;
         let mut dependency = dependent.clone();
 
-        // if the resource returns an output path check if it already exists
+        // register all dependencies
+        for dependency in dependencies {
+            self.add_dependency(dependent.clone(), dependency)?;
+        }
+
+        // concrete resources are registered in the output
         if let Some(path) = path {
             match self.output.get(&path) {
                 Some(existing) => {
@@ -99,9 +104,6 @@ impl Builder {
                 }
                 None => {
                     self.output.insert(path, dependent.clone());
-                    for dependency in dependencies {
-                        self.add_dependency(dependent.clone(), dependency)?;
-                    }
                 }
             }
         }
