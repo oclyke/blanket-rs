@@ -90,7 +90,7 @@ impl Builder {
             self.add_dependency(dependent.clone(), dependency)?;
         }
 
-        // if the resource returns an output path check if it already exists
+        // concrete resources are registered in the output
         if let Some(path) = path {
             match self.output.get(&path) {
                 Some(existing) => {
