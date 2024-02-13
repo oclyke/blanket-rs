@@ -14,7 +14,7 @@ pub use dependency::Dependency;
 /// A resource that can be built.
 pub trait Build: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
-    /// Must be implemented for a concrete type as a defualt implementation
+    /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
     fn as_any(&self) -> &dyn std::any::Any;
 
@@ -118,33 +118,18 @@ impl Builder {
             .get_forward_dependency_topological_layers();
 
         // show the dependency graph
-        if layers.len() > 0 {
-            println!("\ndependency graph:");
-            for layer in &layers {
-                println!("layer:");
-                for node in layer {
-                    println!("  {}", node);
-                }
-            }
-        } else {
+        if layers.len() == 0 {
             println!("no dependencies to show");
         }
 
         // show the output
-        if self.output.len() > 0 {
-            println!("\noutput:");
-            for (path, dependency) in &self.output {
-                println!("  {:?} -> {}", path, dependency);
-            }
-        } else {
+        if self.output.len() == 0 {
             println!("no output to generate");
         }
 
         // generate the site
-        println!("\ngenerating site:");
         for layer in &layers {
             for node in layer {
-                println!("generating {}", node);
                 node.resource().borrow_mut().generate()?;
             }
         }
