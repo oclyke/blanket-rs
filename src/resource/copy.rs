@@ -77,7 +77,7 @@ impl Build for CopyFile {
         };
         Ok(dependencies)
     }
-    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let CopyFile { source, path, .. } = self;
         if source.is_dir() {
             return Err("source is a directory".into());
@@ -185,7 +185,7 @@ impl Build for CopyDir {
         }
         Ok(dependencies)
     }
-    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }

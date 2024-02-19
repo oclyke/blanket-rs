@@ -52,7 +52,7 @@ impl Build for Directory {
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
         Ok(vec![])
     }
-    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Directory { path, .. } = self;
         std::fs::create_dir_all(path)?;
         Ok(())

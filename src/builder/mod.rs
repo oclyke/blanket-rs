@@ -47,7 +47,7 @@ pub trait Build: std::fmt::Debug {
     /// Builds the resource.
     /// This function will be called after the `generate` method of all the resources
     /// upon which this resource depends have been called.
-    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }
@@ -292,7 +292,7 @@ mod tests {
             }
             Ok(dependencies)
         }
-        fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
