@@ -163,8 +163,6 @@ impl Builder {
                     Registration::Concrete(ref path) => match self.output.get(path) {
                         Some(node) => {
                             let existing = node.resource.borrow();
-                            println!("existing: {:?}", existing);
-                            println!("resource: {:?}", resource.clone());
                             if !existing.equals(resource.clone()) {
                                 println!("path: {:?}", path);
                                 println!("existing: {:?}", existing);

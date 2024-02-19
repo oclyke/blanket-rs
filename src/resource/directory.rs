@@ -21,7 +21,6 @@ impl Directory {
 
 impl PartialEq for Directory {
     fn eq(&self, other: &Self) -> bool {
-        println!("checking if {:?} equals {:?}", self, other);
         self.path == other.path
     }
 }
@@ -31,19 +30,11 @@ impl Build for Directory {
         self
     }
     fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
-        println!("checking if {:?} equals {:?}", self, other.borrow());
-
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {
             Some(other) => {
-                println!(
-                    "downcasted to Directory, checking if {:?} equals {:?}",
-                    self, other
-                );
-                let result = (self == other);
-                println!("result: {:?}", result);
-                result
+                self == other
             }
             None => false,
         }
