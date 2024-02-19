@@ -17,7 +17,7 @@ pub enum Registration {
 }
 
 /// A resource that can be built.
-pub trait Build: std::fmt::Debug {
+pub trait Build: {
     /// Returns a reference to the resource as `dyn Any`.
     /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
@@ -340,7 +340,6 @@ mod tests {
                 .equals(true)
                 .build();
             let result = builder.require(unique_mock);
-            println!("{:?}", result);
             assert!(matches!(result, Ok(_)));
         }
 
