@@ -86,7 +86,6 @@ impl Builder {
             Registration::Concrete(dep, path) => {
                 let dep = match self.output.get(&path) {
                     Some(existing) => {
-                        println!("matched existing resource {:?}", existing.resource().borrow().as_any());
                         if !existing.resource().borrow().equals(dep.resource()) {
                             println!("path: {:?}", path);
                             println!("existing: {:?}", existing);
@@ -115,8 +114,6 @@ impl Builder {
         let layers = self
             .dependency_graph
             .get_forward_dependency_topological_layers();
-
-        println!("layers: {:#?}", layers);
 
         // generate the site
         for layer in &layers {
