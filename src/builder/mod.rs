@@ -120,16 +120,6 @@ impl Builder {
             .dependency_graph
             .get_forward_dependency_topological_layers();
 
-        // show the dependency graph
-        if layers.len() == 0 {
-            println!("no dependencies to show");
-        }
-
-        // show the output
-        if self.output.len() == 0 {
-            println!("no output to generate");
-        }
-
         // generate the site
         for layer in &layers {
             for node in layer {
