@@ -11,7 +11,6 @@ then go ahead and start using the library in your own project =D
 fn main() {
     fn run() -> Result<(), Box<dyn std::error::Error>> {
         let mut builder = blanket_rs::builder::Builder::new();
-        builder.init()?;
         builder.require(blanket_rs::resource::CopyFile::new("source/index.html", "dest/index.html"))?;
         builder.generate()?;
         Ok(())
