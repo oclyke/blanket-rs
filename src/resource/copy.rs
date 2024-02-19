@@ -58,7 +58,9 @@ impl Build for CopyFile {
         if source.is_dir() {
             return Err("source is a directory".into());
         }
-        std::fs::copy(source, path)?;
+        let mut source = std::fs::File::open(source)?;
+        let mut dest = std::fs::File::create(path)?;
+        std::io::copy(&mut source, &mut dest)?;
         Ok(())
     }
 }
