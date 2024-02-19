@@ -3,7 +3,6 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::builder::{Build, Builder, Dependency, Registration};
-use crate::resource::Root;
 
 #[derive(Debug)]
 pub struct Directory {
@@ -42,8 +41,7 @@ impl Build for Directory {
     ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let path = self.path.clone();
         let dependency = builder.make_dependency(self)?;
-        let root = builder.require(Root {})?;
-        Ok((Registration::Concrete(dependency, path), vec![root]))
+        Ok((Registration::Concrete(dependency, path), vec![]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Directory { path, .. } = self;
