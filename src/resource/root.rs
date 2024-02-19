@@ -1,4 +1,4 @@
-use crate::builder::{Build, Builder, Dependency};
+use crate::builder::{Build, Builder, Dependency, Registration};
 use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -26,9 +26,12 @@ impl Build for Root {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let dependency = builder.make_dependency(self)?;
-        Ok((Some(PathBuf::from("/")), dependency, vec![]))
+        Ok((
+            Registration::Concrete(dependency, PathBuf::from("/")),
+            vec![],
+        ))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         println!("Root::generate");

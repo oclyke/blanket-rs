@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use blanket_rs::{
-    builder::{Build, Builder, Dependency},
+    builder::{Build, Builder, Dependency, Registration},
     resource::{CopyFile, Root},
 };
 
@@ -93,11 +93,11 @@ impl Build for CopyDir {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let path = self.path.clone();
         let dependency = builder.make_dependency(self)?;
         let root = builder.require(Root {})?;
-        Ok((Some(path), dependency, vec![root]))
+        Ok((Registration::Concrete(dependency, path), vec![root]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let CopyDir { source, .. } = self;

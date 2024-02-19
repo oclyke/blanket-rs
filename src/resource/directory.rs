@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::builder::{Build, Builder, Dependency};
+use crate::builder::{Build, Builder, Dependency, Registration};
 use crate::resource::Root;
 
 #[derive(Debug)]
@@ -39,11 +39,11 @@ impl Build for Directory {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let path = self.path.clone();
         let dependency = builder.make_dependency(self)?;
         let root = builder.require(Root {})?;
-        Ok((Some(path), dependency, vec![root]))
+        Ok((Registration::Concrete(dependency, path), vec![root]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Directory { path, .. } = self;

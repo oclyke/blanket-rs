@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::builder::{Build, Builder, Dependency};
+use crate::builder::{Build, Builder, Dependency, Registration};
 
 pub struct VirtualFile {
     path: PathBuf,
@@ -56,9 +56,9 @@ impl Build for VirtualFile {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let dependency = builder.make_dependency(self)?;
-        Ok((None, dependency, vec![]))
+        Ok((Registration::Virtual(dependency), vec![]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let VirtualFile { path, .. } = self;

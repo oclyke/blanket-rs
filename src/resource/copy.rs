@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::{
-    builder::{Build, Builder, Dependency},
+    builder::{Build, Builder, Dependency, Registration},
     resource::Directory,
 };
 
@@ -43,7 +43,7 @@ impl Build for CopyFile {
     fn register(
         self,
         builder: &mut Builder,
-    ) -> Result<(Option<PathBuf>, Dependency, Vec<Dependency>), Box<dyn std::error::Error>> {
+    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
         let path = self.path.clone();
         let parent = match self.path.parent() {
             Some(parent) => parent,
@@ -51,7 +51,7 @@ impl Build for CopyFile {
         };
         let dir = builder.require(Directory::new(parent))?;
         let dependency = builder.make_dependency(self)?;
-        Ok((Some(path), dependency, vec![dir]))
+        Ok((Registration::Concrete(dependency, path), vec![dir]))
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let CopyFile { source, path } = self;
