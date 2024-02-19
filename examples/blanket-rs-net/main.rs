@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use blanket_rs::{
     builder::Builder,
-    resource::{CopyFile, CopyDir},
+    resource::{CopyDir, CopyFile},
 };
 
 fn main() {
@@ -34,12 +34,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("done.");
 
     // register copied files
-    builder.require(
-        CopyDir::builder(
-            &source.join("assets"),
-            &output.join("assets"),
-        ).build(),
-    )?;
+    builder.require(CopyDir::builder(&source.join("assets"), &output.join("assets")).build())?;
     builder.require(CopyFile::new(
         source.join("index.html"),
         output.join("index.html"),

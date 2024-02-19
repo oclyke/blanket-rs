@@ -1,7 +1,7 @@
+use regex::Regex;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
-use regex::Regex;
 
 use crate::{
     builder::{Build, Builder, Dependency, Registration},

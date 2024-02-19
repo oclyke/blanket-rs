@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use blanket_rs::{
     builder::Builder,
-    resource::{CopyFile, CopyDir},
+    resource::{CopyDir, CopyFile},
 };
 
 fn main() {
@@ -35,10 +35,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // register copied files
     builder.require(
-        CopyDir::builder(
-            &source.join("assets"),
-            &output.join("assets"),
-        )
+        CopyDir::builder(&source.join("assets"), &output.join("assets"))
             .include(vec![r".*\.png"])
             .build(),
     )?;
