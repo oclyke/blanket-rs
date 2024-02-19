@@ -16,7 +16,7 @@ pub enum Registration {
 }
 
 /// A resource that can be built.
-pub trait Generate: std::fmt::Debug {
+pub trait Build: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
     /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
@@ -26,7 +26,7 @@ pub trait Generate: std::fmt::Debug {
     /// Used to determine if the resource has already been registered.
     /// Generally this should return false unless `other` can be downcast to
     /// `Self`.
-    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool;
+    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool;
 
     /// Returns the id of the resource, if it has one.
     /// Used to detect status of resource registration.
@@ -44,7 +44,7 @@ pub trait Generate: std::fmt::Debug {
         builder: &mut Builder,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>>;
 
-    /// Generates the resource.
+    /// Builds the resource.
     /// This function will be called after the `generate` method of all the resources
     /// upon which this resource depends have been called.
     fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -75,7 +75,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn require<T: Generate + 'static>(
+    pub fn require<T: Build + 'static>(
         &mut self,
         resource: T,
     ) -> Result<Node, Box<dyn std::error::Error>> {
@@ -83,7 +83,7 @@ impl Builder {
         self.require_node(node)
     }
 
-    pub fn require_ref<T: Generate + 'static>(
+    pub fn require_ref<T: Build + 'static>(
         &mut self,
         resource: Rc<RefCell<T>>,
     ) -> Result<Node, Box<dyn std::error::Error>> {
@@ -137,7 +137,7 @@ impl Builder {
 
     fn next(
         &mut self,
-        resource: Rc<RefCell<dyn Generate>>,
+        resource: Rc<RefCell<dyn Build>>,
     ) -> Result<Node, Box<dyn std::error::Error>> {
         let optional_id = resource.borrow().id();
         let node = match optional_id {
@@ -260,11 +260,11 @@ mod tests {
         }
     }
 
-    impl Generate for Mock {
+    impl Build for Mock {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
-        fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+        fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
             let other = other.borrow();
             let any = other.as_any();
             match any.downcast_ref::<Self>() {
