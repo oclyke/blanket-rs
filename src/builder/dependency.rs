@@ -5,7 +5,7 @@ use std::rc::Rc;
 use super::Build;
 
 /// Identifiable reference to a resource.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Dependency {
     pub id: u64,
     pub resource: Rc<RefCell<dyn Build>>,
@@ -15,9 +15,9 @@ impl std::fmt::Display for Dependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{{id: {}, resource: {:?}}}",
+            "{{id: {}, resource: {:p}}}",
             self.id,
-            self.resource.borrow()
+            self.resource,
         )
     }
 }
