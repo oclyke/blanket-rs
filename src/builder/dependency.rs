@@ -11,11 +11,11 @@ pub struct Dependency {
     pub resource: Rc<RefCell<dyn Build>>,
 }
 
-impl std::fmt::Display for Dependency {
+impl std::fmt::Debug for Dependency {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "{{id: {}, resource: {:p}}}",
+            "{{id: {:?}, resource: {:?}}}",
             self.id,
             self.resource,
         )

@@ -7,8 +7,6 @@ use std::rc::Rc;
 
 use topologic::AcyclicDependencyGraph;
 
-use crate::resource::Root;
-
 pub use dependency::Dependency;
 
 pub enum Registration {
@@ -17,7 +15,7 @@ pub enum Registration {
 }
 
 /// A resource that can be built.
-pub trait Build: {
+pub trait Build: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
     /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
@@ -60,11 +58,6 @@ impl Builder {
         }
     }
 
-    pub fn init(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        self.require(Root {})?;
-        Ok(())
-    }
-
     pub fn make_dependency<T: Build + 'static>(
         &mut self,
         resource: T,
@@ -91,17 +84,20 @@ impl Builder {
         let dependent = match registration {
             Registration::Virtual(dep) => dep,
             Registration::Concrete(dep, path) => {
-                match self.output.get(&path) {
+                let dep = match self.output.get(&path) {
                     Some(existing) => {
+                        println!("matched existing resource {:?}", existing.resource().borrow().as_any());
                         if !existing.resource().borrow().equals(dep.resource()) {
                             println!("path: {:?}", path);
-                            println!("existing: {}", existing);
-                            println!("dependent: {}", dep);
+                            println!("existing: {:?}", existing);
+                            println!("dependent: {:?}", dep);
                             return Err("output already exists with different data".into());
                         }
+                        existing.clone()
                     }
                     None => {
                         self.output.insert(path, dep.clone());
+                        dep
                     }
                 };
                 dep
@@ -119,6 +115,8 @@ impl Builder {
         let layers = self
             .dependency_graph
             .get_forward_dependency_topological_layers();
+
+        println!("layers: {:#?}", layers);
 
         // generate the site
         for layer in &layers {
@@ -253,17 +251,6 @@ mod tests {
             assert_eq!(builder.dependency_generator.id, 0);
             assert_eq!(builder.dependency_graph.is_empty(), true);
             assert_eq!(builder.output.len(), 0);
-        }
-
-        #[test]
-        fn test_init() {
-            let mut builder = Builder::new();
-            builder.init().unwrap();
-            assert_eq!(builder.dependency_graph.is_empty(), true);
-            assert_eq!(builder.output.len(), 1);
-            assert!(builder.output.contains_key(&PathBuf::from("/")));
-            let root = builder.output.get(&PathBuf::from("/")).unwrap();
-            assert!(matches!(root, Dependency { id: 0, resource: _ }));
         }
 
         #[test]

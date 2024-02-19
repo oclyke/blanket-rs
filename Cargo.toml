@@ -20,6 +20,7 @@ path = "examples/basic/main.rs"
 
 [dependencies]
 topologic = "1.1.0"
+regex = "1.10.3"
+walkdir = "2.4.0"
 
 [dev-dependencies]
-walkdir = "2.4.0"
