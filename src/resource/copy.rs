@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::{
-    builder::{Build, Builder, Dependency, Registration},
+    builder::{Builder, Generate, Node, Registration},
     resource::Directory,
 };
 
@@ -18,30 +18,38 @@ type Filter = Box<dyn Fn(&String) -> bool>;
 
 #[derive(Debug)]
 pub struct CopyFile {
+    id: Option<u64>,
     source: PathBuf,
     path: PathBuf,
+    dir: Option<Rc<RefCell<Directory>>>,
 }
 
 impl CopyFile {
     pub fn new<P: AsRef<Path>>(source: P, path: P) -> Self {
+        let dir = match path.as_ref().parent() {
+            Some(parent) => Some(Rc::new(RefCell::new(Directory::new(parent)))),
+            None => None,
+        };
         Self {
+            id: None,
             source: source.as_ref().to_path_buf(),
             path: path.as_ref().to_path_buf(),
+            dir,
         }
     }
 }
 
 impl PartialEq for CopyFile {
     fn eq(&self, other: &Self) -> bool {
-        self.path == other.path
+        self.source == other.source
     }
 }
 
-impl Build for CopyFile {
+impl Generate for CopyFile {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {
@@ -49,21 +57,28 @@ impl Build for CopyFile {
             None => false,
         }
     }
-    fn register(
-        self,
-        builder: &mut Builder,
-    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
-        let path = self.path.clone();
-        let parent = match self.path.parent() {
-            Some(parent) => parent,
-            None => return Err("path has no parent".into()),
-        };
-        let dir = builder.require(Directory::new(parent))?;
-        let dependency = builder.make_dependency(self)?;
-        Ok((Registration::Concrete(dependency, path), vec![dir]))
+    fn id(&self) -> Option<u64> {
+        self.id
     }
-    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        let CopyFile { source, path } = self;
+    fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>> {
+        self.id = Some(id);
+        Ok(Registration::Concrete(self.path.clone()))
+    }
+    fn dependencies(
+        &mut self,
+        builder: &mut Builder,
+    ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
+        let dependencies = match self.dir.clone() {
+            Some(dir) => {
+                let node = builder.require_ref(dir)?;
+                vec![node]
+            }
+            None => vec![],
+        };
+        Ok(dependencies)
+    }
+    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let CopyFile { source, path, .. } = self;
         if source.is_dir() {
             return Err("source is a directory".into());
         }
@@ -75,9 +90,10 @@ impl Build for CopyFile {
 }
 
 pub struct CopyDir {
+    id: Option<u64>,
     source: PathBuf,
     path: PathBuf,
-    filter: Filter,
+    files: Vec<Rc<RefCell<CopyFile>>>,
 }
 
 impl std::fmt::Debug for CopyDir {
@@ -91,51 +107,7 @@ impl std::fmt::Debug for CopyDir {
 
 impl CopyDir {
     pub fn new<P: AsRef<Path>>(source: P, path: P, filter: Filter) -> Self {
-        Self {
-            source: source.as_ref().to_path_buf(),
-            path: path.as_ref().to_path_buf(),
-            filter,
-        }
-    }
-
-    pub fn builder<P: AsRef<Path>>(source: P, path: P) -> CopyDirBuilder {
-        CopyDirBuilder::new(source, path)
-    }
-}
-
-impl PartialEq for CopyDir {
-    fn eq(&self, other: &Self) -> bool {
-        self.path == other.path
-    }
-}
-
-impl Build for CopyDir {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
-        let other = other.borrow();
-        let any = other.as_any();
-        match any.downcast_ref::<Self>() {
-            Some(other) => self == other,
-            None => false,
-        }
-    }
-    fn register(
-        self,
-        builder: &mut Builder,
-    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
-        let path = self.path.clone();
-        let source = self.source.clone();
-        let mut dependencies = vec![];
-
-        if !source.is_dir() {
-            return Err("source is not a directory".into());
-        }
-        // if !path.is_dir() {
-        //     return Err("output path is not a directory".into());
-        // }
-        let paths: Vec<(PathBuf, PathBuf)> = walkdir::WalkDir::new(&source)
+        let files = walkdir::WalkDir::new(&source)
             .into_iter()
             .filter_map(|e| e.ok())
             .filter_map(|e| {
@@ -153,39 +125,92 @@ impl Build for CopyDir {
                 };
                 Some(relative_str.to_string())
             })
-            .filter(self.filter.as_ref())
-            .map(|relative| (source.join(&relative), path.join(&relative)))
+            .filter(filter.as_ref())
+            .map(|relative| {
+                (
+                    source.as_ref().join(&relative),
+                    path.as_ref().join(&relative),
+                )
+            })
+            .map(|(source, path)| Rc::new(RefCell::new(CopyFile::new(source, path))))
             .collect();
 
-        for (source, output) in paths {
-            let dep = builder.require(CopyFile::new(source, output))?;
-            dependencies.push(dep);
+        Self {
+            id: None,
+            source: source.as_ref().to_path_buf(),
+            path: path.as_ref().to_path_buf(),
+            files,
         }
-
-        let dependency = builder.make_dependency(self)?;
-
-        Ok((Registration::Virtual(dependency), dependencies))
     }
-    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+
+    pub fn builder<P: AsRef<Path>>(source: P, path: P) -> CopyDirBuilder {
+        CopyDirBuilder::new(source, path)
+    }
+}
+
+impl PartialEq for CopyDir {
+    fn eq(&self, other: &Self) -> bool {
+        self.source == other.source
+    }
+}
+
+impl Generate for CopyDir {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+        let other = other.borrow();
+        let any = other.as_any();
+        match any.downcast_ref::<Self>() {
+            Some(other) => self == other,
+            None => false,
+        }
+    }
+
+    fn id(&self) -> Option<u64> {
+        self.id
+    }
+    fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>> {
+        self.id = Some(id);
+        Ok(Registration::Concrete(self.path.clone()))
+    }
+    fn dependencies(
+        &mut self,
+        builder: &mut Builder,
+    ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
+        let mut dependencies = vec![];
+        for file in self.files.clone() {
+            let node = builder.require_ref(file)?;
+            dependencies.push(node);
+        }
+        Ok(dependencies)
+    }
+    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 }
 
 pub struct CopyDirBuilder {
+    id: Option<u64>,
+
     source: PathBuf,
     path: PathBuf,
 
     include: Option<Vec<Regex>>,
     exclude: Option<Vec<Regex>>,
+
+    dependencies: Vec<Node>,
 }
 
 impl CopyDirBuilder {
     pub fn new<P: AsRef<Path>>(source: P, path: P) -> Self {
         Self {
+            id: None,
             source: source.as_ref().to_path_buf(),
             path: path.as_ref().to_path_buf(),
             include: None,
             exclude: None,
+            dependencies: vec![],
         }
     }
 
@@ -209,11 +234,7 @@ impl CopyDirBuilder {
 
     pub fn build(self) -> CopyDir {
         let filter = build_filter(self.include.clone(), self.exclude.clone());
-        CopyDir {
-            source: self.source,
-            path: self.path,
-            filter,
-        }
+        CopyDir::new(self.source, self.path, filter)
     }
 }
 
