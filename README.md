@@ -10,13 +10,13 @@ then go ahead and start using the library in your own project =D
 ```rust
 fn main() {
     fn run() -> Result<(), Box<dyn std::error::Error>> {
-        let mut builder = blanket::builder::Builder::new("example")?;
+        let mut builder = blanket_rs::builder::Builder::new();
         builder.init()?;
-        builder.require(blanket::resource::CopyFile("/source/index.html", "/dest/index.html"))?;
+        builder.require(blanket_rs::resource::CopyFile::new("source/index.html", "dest/index.html"))?;
         builder.generate()?;
         Ok(())
     }
-    run().expext("expected to exit successfully");
+    run().expect("expected to exit successfully");
 }
 ```
 
