@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::{
-    builder::{Builder, Generate, Node, Registration},
+    builder::{Build, Builder, Node, Registration},
     resource::Directory,
 };
 
@@ -45,11 +45,11 @@ impl PartialEq for CopyFile {
     }
 }
 
-impl Generate for CopyFile {
+impl Build for CopyFile {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {
@@ -154,11 +154,11 @@ impl PartialEq for CopyDir {
     }
 }
 
-impl Generate for CopyDir {
+impl Build for CopyDir {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {

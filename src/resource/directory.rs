@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::builder::{Builder, Generate, Node, Registration};
+use crate::builder::{Build, Builder, Node, Registration};
 
 #[derive(Debug)]
 pub struct Directory {
@@ -26,11 +26,11 @@ impl PartialEq for Directory {
     }
 }
 
-impl Generate for Directory {
+impl Build for Directory {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
         println!("checking if {:?} equals {:?}", self, other.borrow());
 
         let other = other.borrow();
