@@ -1,4 +1,4 @@
-mod dependency;
+mod node;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -7,15 +7,16 @@ use std::rc::Rc;
 
 use topologic::AcyclicDependencyGraph;
 
-pub use dependency::Dependency;
+pub use node::Node;
 
+#[derive(Debug)]
 pub enum Registration {
-    Virtual(Dependency),
-    Concrete(Dependency, PathBuf),
+    Virtual(),
+    Concrete(PathBuf),
 }
 
 /// A resource that can be built.
-pub trait Build: std::fmt::Debug {
+pub trait Generate: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
     /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
@@ -25,88 +26,81 @@ pub trait Build: std::fmt::Debug {
     /// Used to determine if the resource has already been registered.
     /// Generally this should return false unless `other` can be downcast to
     /// `Self`.
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool;
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool;
+
+    /// Returns the id of the resource, if it has one.
+    /// Used to detect status of resource registration.
+    fn id(&self) -> Option<u64>;
 
     /// Registers the resource with the builder.
-    /// Responsibilities include:
-    /// - providing an optional path at which to place the resource in the output
-    /// - providing the dependency which contains the registered resource
-    /// - providing a vector of dependencies upon which the registered resource depends
-    fn register(
-        self,
+    /// Responsibilities:
+    /// - Set the id of the resource.
+    /// - Require any dependencies of the resource.
+    fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>>;
+
+    /// Returns registered nodes of the dependencies.
+    fn dependencies(
+        &mut self,
         builder: &mut Builder,
-    ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>>;
+    ) -> Result<Vec<Node>, Box<dyn std::error::Error>>;
 
     /// Generates the resource.
     /// This function will be called after the `generate` method of all the resources
     /// upon which this resource depends have been called.
-    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+    fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        Ok(())
+    }
 }
 
 pub struct Builder {
-    dependency_generator: DependencyGenerator,
-    dependency_graph: AcyclicDependencyGraph<Dependency>,
-    output: HashMap<PathBuf, Dependency>,
+    dependency_graph: AcyclicDependencyGraph<Node>,
+    nodes: HashMap<u64, Node>,
+    next_id: u64,
+    roots: Vec<Node>,
+    output: HashMap<PathBuf, Node>,
 }
 
 impl Builder {
     pub fn new() -> Self {
         Self {
-            dependency_generator: DependencyGenerator::new(),
             dependency_graph: AcyclicDependencyGraph::new(),
+            nodes: HashMap::new(),
+            next_id: 0,
+            roots: vec![],
             output: HashMap::new(),
         }
     }
 
-    pub fn make_dependency<T: Build + 'static>(
-        &mut self,
-        resource: T,
-    ) -> Result<Dependency, Box<dyn std::error::Error>> {
-        let reference = Rc::new(RefCell::new(resource));
-        let dependency = self.dependency_generator.next(reference);
-        Ok(dependency)
-    }
-
-    pub fn add_dependency(
-        &mut self,
-        from: Dependency,
-        to: Dependency,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.dependency_graph.depend_on(from, to)?;
+    pub fn init(self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
-    pub fn require<T: Build>(
+    pub fn require<T: Generate + 'static>(
         &mut self,
         resource: T,
-    ) -> Result<Dependency, Box<dyn std::error::Error>> {
-        let (registration, dependencies) = resource.register(self)?;
-        let dependent = match registration {
-            Registration::Virtual(dep) => dep,
-            Registration::Concrete(dep, path) => {
-                let dep = match self.output.get(&path) {
-                    Some(existing) => {
-                        if !existing.resource().borrow().equals(dep.resource()) {
-                            println!("path: {:?}", path);
-                            println!("existing: {:?}", existing);
-                            println!("dependent: {:?}", dep);
-                            return Err("output already exists with different data".into());
-                        }
-                        existing.clone()
-                    }
-                    None => {
-                        self.output.insert(path, dep.clone());
-                        dep
-                    }
-                };
-                dep
-            }
-        };
-        for dependency in dependencies {
-            self.add_dependency(dependent.clone(), dependency)?;
-        }
+    ) -> Result<Node, Box<dyn std::error::Error>> {
+        let node = self.next(Rc::new(RefCell::new(resource)))?;
+        self.require_node(node)
+    }
 
-        Ok(dependent)
+    pub fn require_ref<T: Generate + 'static>(
+        &mut self,
+        resource: Rc<RefCell<T>>,
+    ) -> Result<Node, Box<dyn std::error::Error>> {
+        let node = self.next(resource)?;
+        self.require_node(node)
+    }
+
+    pub fn require_node(&mut self, node: Node) -> Result<Node, Box<dyn std::error::Error>> {
+        self.nodes.insert(node.id, node.clone());
+        self.roots.push(node.clone());
+        for dependency in node.clone().dependencies {
+            self.dependency_graph
+                .depend_on(node.clone(), dependency.clone())
+                .unwrap();
+            self.require_node(dependency.clone())?;
+        }
+        Ok(node)
     }
 
     pub fn generate(self) -> Result<(), Box<dyn std::error::Error>> {
@@ -124,41 +118,104 @@ impl Builder {
 
         Ok(())
     }
-}
 
-/// Generates dependencies from resources.
-/// Identifiers monotonically increase.
-struct DependencyGenerator {
-    id: u64,
-}
-
-impl DependencyGenerator {
-    fn new() -> Self {
-        Self { id: 0 }
+    pub fn output(&self) -> HashMap<PathBuf, Node> {
+        self.output.clone()
     }
 
-    fn next(&mut self, data: Rc<RefCell<dyn Build>>) -> Dependency {
-        let id = self.id;
-        self.id += 1;
-        Dependency::new(id, data)
+    pub fn nodes(&self) -> HashMap<u64, Node> {
+        self.nodes.clone()
+    }
+
+    pub fn roots(&self) -> Vec<Node> {
+        self.roots.clone()
+    }
+
+    pub fn dependency_graph(&self) -> AcyclicDependencyGraph<Node> {
+        self.dependency_graph.clone()
+    }
+
+    fn next(
+        &mut self,
+        resource: Rc<RefCell<dyn Generate>>,
+    ) -> Result<Node, Box<dyn std::error::Error>> {
+        let optional_id = resource.borrow().id();
+        let node = match optional_id {
+            Some(id) => {
+                let existing = self.nodes.get(&id);
+                match existing {
+                    Some(node) => node.clone(),
+                    None => {
+                        let message =
+                            format!("Node with id {} expected in nodes but not found", id);
+                        return Err(message.into());
+                    }
+                }
+            }
+            None => {
+                let id = self.next_id;
+                self.next_id += 1;
+                let registration = resource.borrow_mut().register(id)?;
+
+                // check for existing node
+                let existing = match registration {
+                    Registration::Virtual() => None,
+                    Registration::Concrete(ref path) => match self.output.get(path) {
+                        Some(node) => {
+                            let existing = node.resource.borrow();
+                            println!("existing: {:?}", existing);
+                            println!("resource: {:?}", resource.clone());
+                            if !existing.equals(resource.clone()) {
+                                println!("path: {:?}", path);
+                                println!("existing: {:?}", existing);
+                                return Err("output already exists with different data".into());
+                            }
+                            Some(node.clone())
+                        }
+                        None => None,
+                    },
+                };
+                if existing.is_some() {
+                    return Ok(existing.unwrap());
+                }
+
+                // create new node
+                let dependencies = resource.borrow_mut().dependencies(self)?;
+                let node = Node::new(id, resource.clone(), dependencies);
+                match registration {
+                    Registration::Virtual() => {}
+                    Registration::Concrete(ref path) => {
+                        self.output
+                            .insert(path.clone(), Node::new(id, resource.clone(), vec![]));
+                    }
+                };
+                node
+            }
+        };
+        Ok(node)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     #[derive(Debug)]
     struct Mock {
+        id: Option<u64>,
         path: Option<PathBuf>,
         equals: bool,
+        content: Option<String>,
+        shared: Option<Rc<RefCell<Mock>>>,
     }
 
     #[derive(Clone)]
     struct MockBuilder {
         path: Option<PathBuf>,
         equals: bool,
+        content: Option<String>,
+        shared: Option<Rc<RefCell<Mock>>>,
     }
 
     impl MockBuilder {
@@ -166,6 +223,8 @@ mod tests {
             Self {
                 path: None,
                 equals: false,
+                content: None,
+                shared: None,
             }
         }
         fn path<P: AsRef<Path>>(mut self, path: P) -> Self {
@@ -176,37 +235,66 @@ mod tests {
             self.equals = equals;
             self
         }
+        fn content(mut self, content: String) -> Self {
+            self.content = Some(content);
+            self
+        }
+        fn shared(mut self, shared: Rc<RefCell<Mock>>) -> Self {
+            self.shared = Some(shared);
+            self
+        }
         fn build(self) -> Mock {
             Mock {
+                id: None,
                 path: self.path,
                 equals: self.equals,
+                content: self.content,
+                shared: self.shared,
             }
         }
     }
 
-    impl Build for Mock {
+    impl PartialEq for Mock {
+        fn eq(&self, other: &Self) -> bool {
+            self.equals
+        }
+    }
+
+    impl Generate for Mock {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
-
-        fn equals(&self, _: Rc<RefCell<dyn Build>>) -> bool {
-            self.equals
+        fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+            let other = other.borrow();
+            let any = other.as_any();
+            match any.downcast_ref::<Self>() {
+                Some(other) => self == other,
+                None => false,
+            }
         }
-
-        fn register(
-            self,
-            builder: &mut Builder,
-        ) -> Result<(Registration, Vec<Dependency>), Box<dyn std::error::Error>> {
-            let path = self.path.clone();
-            let dependency = builder.make_dependency(self)?;
-            let registration = match path {
-                Some(path) => Registration::Concrete(dependency.clone(), path),
-                None => Registration::Virtual(dependency.clone()),
+        fn id(&self) -> Option<u64> {
+            self.id
+        }
+        fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>> {
+            self.id = Some(id);
+            let registration = match self.path.clone() {
+                Some(path) => Registration::Concrete(PathBuf::from(path)),
+                None => Registration::Virtual(),
             };
-            Ok((registration, vec![]))
+            Ok(registration)
         }
-
-        fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        fn dependencies(
+            &mut self,
+            builder: &mut Builder,
+        ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
+            let mut dependencies = vec![];
+            if let Some(inner) = self.shared.as_ref() {
+                let node = builder.require_ref(inner.clone())?;
+                dependencies.push(node);
+            }
+            Ok(dependencies)
+        }
+        fn generate(&self) -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
     }
@@ -245,9 +333,9 @@ mod tests {
         #[test]
         fn test_new() {
             let builder = Builder::new();
-            assert_eq!(builder.dependency_generator.id, 0);
+            assert_eq!(builder.next_id, 0);
             assert_eq!(builder.dependency_graph.is_empty(), true);
-            assert_eq!(builder.output.len(), 0);
+            assert_eq!(builder.nodes.len(), 0);
         }
 
         #[test]
@@ -257,20 +345,19 @@ mod tests {
 
             // first dependency
             let mock = mocker.clone().build();
-            let dependency = builder.make_dependency(mock).unwrap();
+            let dependency = builder.require(mock).unwrap();
             assert_eq!(builder.dependency_graph.is_empty(), true);
-            assert_eq!(builder.output.len(), 0);
+            assert_eq!(builder.nodes.len(), 1);
             assert_eq!(dependency.id, 0);
 
             // second dependency
             let mock = mocker.clone().build();
-            let dependency = builder.make_dependency(mock).unwrap();
+            let dependency = builder.require(mock).unwrap();
             assert_eq!(builder.dependency_graph.is_empty(), true);
-            assert_eq!(builder.output.len(), 0);
+            assert_eq!(builder.nodes.len(), 2);
             assert_eq!(dependency.id, 1);
         }
 
-        #[test]
         fn test_require_unique_resources_identical_paths_collide() {
             let mut builder = Builder::new();
             const REGISTRATION_PATH: &str = "identical";
@@ -338,49 +425,32 @@ mod tests {
         }
 
         #[test]
-        fn test_require_virtual_resources_ok() {
+        fn test_common_resource() {
             let mut builder = Builder::new();
-            const REGISTRATION_PATH_1: &str = "path1";
-            const REGISTRATION_PATH_2: &str = "path2";
-            assert_ne!(REGISTRATION_PATH_1, REGISTRATION_PATH_2);
-
-            // add the first virtual mock resource
-            let mock = MockBuilder::new().build();
-            let result = builder.require(mock);
-            assert!(matches!(result, Ok(_)));
-
-            // add the second virtual mock resource
-            // this should succeed because virtual resources are not registered
-            // in the output
-            let identical_mock = MockBuilder::new().build();
-            let result = builder.require(identical_mock);
-            assert!(matches!(result, Ok(_)));
-        }
-    }
-
-    mod test_generator {
-        use super::*;
-
-        #[test]
-        fn test_initial_conditions() {
-            let generator = DependencyGenerator::new();
-            assert_eq!(generator.id, 0);
-        }
-
-        #[test]
-        fn test_next() {
-            let mut generator = DependencyGenerator::new();
             let mocker = MockBuilder::new();
 
-            // first dependency
-            let mock = mocker.clone().build();
-            let dependency = generator.next(Rc::new(RefCell::new(mock)));
-            assert_eq!(dependency.id, 0);
+            // a common resource
+            let common = mocker.clone().content(String::from("shared")).build();
+            let common = Rc::new(RefCell::new(common));
+            assert!(builder.nodes.is_empty());
 
-            // second dependency
-            let mock = mocker.clone().build();
-            let dependency = generator.next(Rc::new(RefCell::new(mock)));
-            assert_eq!(dependency.id, 1);
+            // a resource that depends on the common resource
+            let dependent = mocker.clone().shared(common.clone()).build();
+            let result = builder.require(dependent);
+            assert!(result.is_ok());
+            let node = result.unwrap();
+            assert_eq!(node.id, 0);
+            assert_eq!(builder.nodes.len(), 2);
+            assert_eq!(common.borrow().id, Some(1));
+
+            // the common resource should not be duplicated when it is required by another resource
+            let dependent = mocker.clone().shared(common.clone()).build();
+            let result = builder.require(dependent);
+            assert!(result.is_ok());
+            let node = result.unwrap();
+            assert_eq!(node.id, 2);
+            assert_eq!(builder.nodes.len(), 3);
+            assert_eq!(common.borrow().id, Some(1));
         }
     }
 }
