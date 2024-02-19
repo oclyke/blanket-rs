@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::{
-    builder::{Builder, Build, Node, Registration},
+    builder::{Build, Builder, Node, Registration},
     resource::Directory,
 };
 

@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::builder::{Builder, Build, Node, Registration};
+use crate::builder::{Build, Builder, Node, Registration};
 
 #[derive(Debug)]
 pub struct Directory {
