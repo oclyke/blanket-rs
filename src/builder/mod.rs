@@ -71,7 +71,7 @@ impl Builder {
         }
     }
 
-    pub fn init(self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn init(&self) -> Result<(), Box<dyn std::error::Error>> {
         Ok(())
     }
 
@@ -166,6 +166,7 @@ impl Builder {
                             if !existing.equals(resource.clone()) {
                                 println!("path: {:?}", path);
                                 println!("existing: {:?}", existing);
+                                println!("resource: {:?}", resource);
                                 return Err("output already exists with different data".into());
                             }
                             Some(node.clone())
