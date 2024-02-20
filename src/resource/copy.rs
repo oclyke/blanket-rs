@@ -21,20 +21,14 @@ pub struct CopyFile {
     id: Option<u64>,
     source: PathBuf,
     path: PathBuf,
-    dir: Option<Rc<RefCell<Directory>>>,
 }
 
 impl CopyFile {
     pub fn new<P: AsRef<Path>>(source: P, path: P) -> Self {
-        let dir = match path.as_ref().parent() {
-            Some(parent) => Some(Rc::new(RefCell::new(Directory::new(parent)))),
-            None => None,
-        };
         Self {
             id: None,
             source: source.as_ref().to_path_buf(),
             path: path.as_ref().to_path_buf(),
-            dir,
         }
     }
 }
@@ -68,11 +62,10 @@ impl Build for CopyFile {
         &mut self,
         builder: &mut Builder,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
-        let dependencies = match self.dir.clone() {
-            Some(dir) => {
-                let node = builder.require_ref(dir)?;
-                vec![node]
-            }
+        let dependencies = match self.path.parent() {
+            Some(parent) => {
+                vec![builder.require_ref(Rc::new(RefCell::new(Directory::new(parent))))?]
+            },
             None => vec![],
         };
         Ok(dependencies)
@@ -172,13 +165,15 @@ impl Build for CopyDir {
     }
     fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>> {
         self.id = Some(id);
-        Ok(Registration::Concrete(self.path.clone()))
+        Ok(Registration::Virtual())
     }
     fn dependencies(
         &mut self,
         builder: &mut Builder,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
-        let mut dependencies = vec![];
+        let mut dependencies = vec![
+            builder.require_ref(Rc::new(RefCell::new(Directory::new(self.path.clone()))))?
+        ];
         for file in self.files.clone() {
             let node = builder.require_ref(file)?;
             dependencies.push(node);
