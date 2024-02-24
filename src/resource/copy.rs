@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::{
-    builder::{Build, Builder, Node, Registration},
+    generator::{Generate, Generator, Node, Registration},
     resource::Directory,
 };
 
@@ -39,11 +39,11 @@ impl PartialEq for CopyFile {
     }
 }
 
-impl Build for CopyFile {
+impl Generate for CopyFile {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {
@@ -60,7 +60,7 @@ impl Build for CopyFile {
     }
     fn dependencies(
         &mut self,
-        builder: &mut Builder,
+        builder: &mut Generator,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
         let dependencies = match self.path.parent() {
             Some(parent) => {
@@ -136,8 +136,8 @@ impl CopyDir {
         }
     }
 
-    pub fn builder<P: AsRef<Path>>(source: P, path: P) -> CopyDirBuilder {
-        CopyDirBuilder::new(source, path)
+    pub fn builder<P: AsRef<Path>>(source: P, path: P) -> CopyDirGenerator {
+        CopyDirGenerator::new(source, path)
     }
 }
 
@@ -147,11 +147,11 @@ impl PartialEq for CopyDir {
     }
 }
 
-impl Build for CopyDir {
+impl Generate for CopyDir {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
         let other = other.borrow();
         let any = other.as_any();
         match any.downcast_ref::<Self>() {
@@ -169,7 +169,7 @@ impl Build for CopyDir {
     }
     fn dependencies(
         &mut self,
-        builder: &mut Builder,
+        builder: &mut Generator,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
         let mut dependencies = vec![
             builder.require_ref(Rc::new(RefCell::new(Directory::new(self.path.clone()))))?
@@ -185,7 +185,7 @@ impl Build for CopyDir {
     }
 }
 
-pub struct CopyDirBuilder {
+pub struct CopyDirGenerator {
     id: Option<u64>,
 
     source: PathBuf,
@@ -197,7 +197,7 @@ pub struct CopyDirBuilder {
     dependencies: Vec<Node>,
 }
 
-impl CopyDirBuilder {
+impl CopyDirGenerator {
     pub fn new<P: AsRef<Path>>(source: P, path: P) -> Self {
         Self {
             id: None,

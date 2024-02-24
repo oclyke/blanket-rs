@@ -16,7 +16,7 @@ pub enum Registration {
 }
 
 /// A resource that can be built.
-pub trait Build: std::fmt::Debug {
+pub trait Generate: std::fmt::Debug {
     /// Returns a reference to the resource as `dyn Any`.
     /// Must be implemented for a concrete type as a default implementation
     /// suffers from type erasure.
@@ -26,7 +26,7 @@ pub trait Build: std::fmt::Debug {
     /// Used to determine if the resource has already been registered.
     /// Generally this should return false unless `other` can be downcast to
     /// `Self`.
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool;
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool;
 
     /// Returns the id of the resource, if it has one.
     /// Used to detect status of resource registration.
@@ -41,10 +41,10 @@ pub trait Build: std::fmt::Debug {
     /// Returns registered nodes of the dependencies.
     fn dependencies(
         &mut self,
-        builder: &mut Builder,
+        builder: &mut Generator,
     ) -> Result<Vec<Node>, Box<dyn std::error::Error>>;
 
-    /// Builds the resource.
+    /// Generates the resource.
     /// This function will be called after the `generate` method of all the resources
     /// upon which this resource depends have been called.
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
@@ -52,7 +52,7 @@ pub trait Build: std::fmt::Debug {
     }
 }
 
-pub struct Builder {
+pub struct Generator {
     dependency_graph: AcyclicDependencyGraph<Node>,
     nodes: HashMap<u64, Node>,
     next_id: u64,
@@ -60,7 +60,7 @@ pub struct Builder {
     output: HashMap<PathBuf, Node>,
 }
 
-impl Builder {
+impl Generator {
     pub fn new() -> Self {
         Self {
             dependency_graph: AcyclicDependencyGraph::new(),
@@ -75,7 +75,7 @@ impl Builder {
         Ok(())
     }
 
-    pub fn require<T: Build + 'static>(
+    pub fn require<T: Generate + 'static>(
         &mut self,
         resource: T,
     ) -> Result<Node, Box<dyn std::error::Error>> {
@@ -83,7 +83,7 @@ impl Builder {
         self.require_node(node)
     }
 
-    pub fn require_ref<T: Build + 'static>(
+    pub fn require_ref<T: Generate + 'static>(
         &mut self,
         resource: Rc<RefCell<T>>,
     ) -> Result<Node, Box<dyn std::error::Error>> {
@@ -137,7 +137,7 @@ impl Builder {
 
     fn next(
         &mut self,
-        resource: Rc<RefCell<dyn Build>>,
+        resource: Rc<RefCell<dyn Generate>>,
     ) -> Result<Node, Box<dyn std::error::Error>> {
         let optional_id = resource.borrow().id();
         let node = match optional_id {
@@ -210,14 +210,14 @@ mod tests {
     }
 
     #[derive(Clone)]
-    struct MockBuilder {
+    struct MockGenerator {
         path: Option<PathBuf>,
         equals: bool,
         content: Option<String>,
         shared: Option<Rc<RefCell<Mock>>>,
     }
 
-    impl MockBuilder {
+    impl MockGenerator {
         fn new() -> Self {
             Self {
                 path: None,
@@ -259,11 +259,11 @@ mod tests {
         }
     }
 
-    impl Build for Mock {
+    impl Generate for Mock {
         fn as_any(&self) -> &dyn std::any::Any {
             self
         }
-        fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
+        fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
             let other = other.borrow();
             let any = other.as_any();
             match any.downcast_ref::<Self>() {
@@ -284,7 +284,7 @@ mod tests {
         }
         fn dependencies(
             &mut self,
-            builder: &mut Builder,
+            builder: &mut Generator,
         ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
             let mut dependencies = vec![];
             if let Some(inner) = self.shared.as_ref() {
@@ -306,22 +306,22 @@ mod tests {
             const PATH: &str = "/path/to/resource";
 
             // path defaults to None
-            let mock = super::MockBuilder::new().build();
+            let mock = super::MockGenerator::new().build();
             assert_eq!(mock.path, None);
 
             // path can be set
-            let mock = super::MockBuilder::new().path(PATH).build();
+            let mock = super::MockGenerator::new().path(PATH).build();
             assert_eq!(mock.path, Some(PathBuf::from(PATH)));
         }
 
         #[test]
         fn test_mock_equals() {
             // equals defaults to false
-            let mock = super::MockBuilder::new().build();
+            let mock = super::MockGenerator::new().build();
             assert_eq!(mock.equals, false);
 
             // equals can be set
-            let mock = super::MockBuilder::new().equals(true).build();
+            let mock = super::MockGenerator::new().equals(true).build();
             assert_eq!(mock.equals, true);
         }
     }
@@ -331,7 +331,7 @@ mod tests {
 
         #[test]
         fn test_new() {
-            let builder = Builder::new();
+            let builder = Generator::new();
             assert_eq!(builder.next_id, 0);
             assert_eq!(builder.dependency_graph.is_empty(), true);
             assert_eq!(builder.nodes.len(), 0);
@@ -339,8 +339,8 @@ mod tests {
 
         #[test]
         fn test_make_dependency() {
-            let mut builder = Builder::new();
-            let mocker = MockBuilder::new();
+            let mut builder = Generator::new();
+            let mocker = MockGenerator::new();
 
             // first dependency
             let mock = mocker.clone().build();
@@ -358,11 +358,11 @@ mod tests {
         }
 
         fn test_require_unique_resources_identical_paths_collide() {
-            let mut builder = Builder::new();
+            let mut builder = Generator::new();
             const REGISTRATION_PATH: &str = "identical";
 
             // add the first mock dependency
-            let mock = MockBuilder::new().path(REGISTRATION_PATH).build();
+            let mock = MockGenerator::new().path(REGISTRATION_PATH).build();
             let result = builder.require(mock);
             assert!(matches!(result, Ok(_)));
 
@@ -370,7 +370,7 @@ mod tests {
             // this should fail because the output path is already registered
             // and the unique mock is configured to indicate that it is not
             // equal to the existing mock
-            let unique_mock = MockBuilder::new()
+            let unique_mock = MockGenerator::new()
                 .path(REGISTRATION_PATH)
                 .equals(false)
                 .build();
@@ -380,11 +380,11 @@ mod tests {
 
         #[test]
         fn test_require_identical_resources_identical_paths_ok() {
-            let mut builder = Builder::new();
+            let mut builder = Generator::new();
             const REGISTRATION_PATH: &str = "identical";
 
             // add the first mock dependency
-            let mock = MockBuilder::new()
+            let mock = MockGenerator::new()
                 .path(REGISTRATION_PATH)
                 .equals(true)
                 .build();
@@ -395,7 +395,7 @@ mod tests {
             // this should succeed despite being registered at the same output
             // path because the identical mock is configured to indicate that
             // it is equal to the existing mock
-            let unique_mock = MockBuilder::new()
+            let unique_mock = MockGenerator::new()
                 .path(REGISTRATION_PATH)
                 .equals(true)
                 .build();
@@ -405,28 +405,28 @@ mod tests {
 
         #[test]
         fn test_require_unique_paths_ok() {
-            let mut builder = Builder::new();
+            let mut builder = Generator::new();
             const REGISTRATION_PATH_1: &str = "path1";
             const REGISTRATION_PATH_2: &str = "path2";
             assert_ne!(REGISTRATION_PATH_1, REGISTRATION_PATH_2);
 
             // add the first mock dependency
-            let mock = MockBuilder::new().path(REGISTRATION_PATH_1).build();
+            let mock = MockGenerator::new().path(REGISTRATION_PATH_1).build();
             let result = builder.require(mock);
             assert!(matches!(result, Ok(_)));
 
             // add the identical mock dependency
             // this should succeed because the output path is different,
             // regardless of the equality of the mocks
-            let identical_mock = MockBuilder::new().path(REGISTRATION_PATH_2).build();
+            let identical_mock = MockGenerator::new().path(REGISTRATION_PATH_2).build();
             let result = builder.require(identical_mock);
             assert!(matches!(result, Ok(_)));
         }
 
         #[test]
         fn test_common_resource() {
-            let mut builder = Builder::new();
-            let mocker = MockBuilder::new();
+            let mut builder = Generator::new();
+            let mocker = MockGenerator::new();
 
             // a common resource
             let common = mocker.clone().content(String::from("shared")).build();

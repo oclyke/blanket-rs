@@ -2,13 +2,13 @@ use std::cell::RefCell;
 use std::hash::{Hash, Hasher};
 use std::rc::Rc;
 
-use super::Build;
+use super::Generate;
 
 /// Node identifying a resource in the graph.
 #[derive(Clone)]
 pub struct Node {
     pub id: u64,
-    pub resource: Rc<RefCell<dyn Build>>,
+    pub resource: Rc<RefCell<dyn Generate>>,
     pub dependencies: Vec<Node>,
 }
 
@@ -19,7 +19,7 @@ impl std::fmt::Debug for Node {
 }
 
 impl Node {
-    pub fn new(id: u64, resource: Rc<RefCell<dyn Build>>, dependencies: Vec<Node>) -> Self {
+    pub fn new(id: u64, resource: Rc<RefCell<dyn Generate>>, dependencies: Vec<Node>) -> Self {
         Self {
             id,
             resource,
@@ -27,7 +27,7 @@ impl Node {
         }
     }
 
-    pub fn resource(&self) -> Rc<RefCell<dyn Build>> {
+    pub fn resource(&self) -> Rc<RefCell<dyn Generate>> {
         self.resource.clone()
     }
 }

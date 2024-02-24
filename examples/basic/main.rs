@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use blanket_rs::{
-    builder::Builder,
+    generator::Generator,
     resource::{CopyDir, CopyFile},
 };
 
@@ -22,7 +22,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let example_dir = PathBuf::from("examples/basic");
     let source = example_dir.join("site-content");
     let output = example_dir.join("site-out");
-    let mut builder = Builder::new();
+    let mut builder = Generator::new();
 
     // clear the output directory
     // prefer immutability over performance
