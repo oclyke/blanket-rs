@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 
 use blanket_rs::{
-    generator::Generator,
     resource::{CopyDir, CopyFile},
+    Generator,
 };
 
 fn main() {
@@ -38,19 +38,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         CopyDir::builder(&source.join("assets"), &output.join("assets"))
             .include(vec![r".*\.png"])
             .build(),
-    )?;
+    );
     builder.require(CopyFile::new(
         source.join("index.html"),
         output.join("index.html"),
-    ))?;
+    ));
     builder.require(CopyFile::new(
         source.join("style.css"),
         output.join("style.css"),
-    ))?;
+    ));
     builder.require(CopyFile::new(
         source.join("reset.css"),
         output.join("reset.css"),
-    ))?;
+    ));
 
     builder.generate()?;
 
