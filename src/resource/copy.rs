@@ -3,7 +3,14 @@ use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::{DelayedRegistration, Generate, Generator, Registration, ResourceRef};
+use log::warn;
+
+use crate::{
+    DelayedRegistration, Generate, NonterminalRegistration, Registration, ResourceRef,
+    TerminalRegistration,
+};
+
+use crate::resource::Directory;
 
 #[derive(Clone)]
 pub struct Filters {
@@ -37,19 +44,38 @@ impl PartialEq for CopyFile {
 impl Generate for CopyFile {
     fn register(&self, resource: ResourceRef) -> DelayedRegistration {
         let path = self.path.clone();
-        Box::new(|| vec![Registration::Concrete(resource, path)])
+        Box::new(move || {
+            let parent = match path.parent() {
+                Some(parent) => parent.to_path_buf(),
+                None => {
+                    warn!("path has no parent");
+                    return Err("path has no parent".into());
+                }
+            };
+            let directory = Rc::new(RefCell::new(Directory::new(parent)));
+            Ok(vec![
+                Registration::Nonterminal(NonterminalRegistration::DependUnique(
+                    resource.clone(),
+                    directory.clone(),
+                )),
+                Registration::Terminal(TerminalRegistration::Concrete(
+                    resource.clone(),
+                    path.clone(),
+                )),
+            ])
+        })
     }
 
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("copying file: {:?}", self.source);
+        println!("copying file: {:?} to {:?}", self.source, self.path);
 
-        // let CopyFile { source, path, .. } = self;
-        // if source.is_dir() {
-        //     return Err("source is a directory".into());
-        // }
-        // let mut source = std::fs::File::open(source)?;
-        // let mut dest = std::fs::File::create(path)?;
-        // std::io::copy(&mut source, &mut dest)?;
+        let CopyFile { source, path, .. } = self;
+        if source.is_dir() {
+            return Err("source is a directory".into());
+        }
+        let mut source = std::fs::File::open(source)?;
+        let mut dest = std::fs::File::create(path)?;
+        std::io::copy(&mut source, &mut dest)?;
         Ok(())
     }
 }
@@ -59,15 +85,6 @@ pub struct CopyDir {
     path: PathBuf,
     filters: Filters,
 }
-
-// impl std::fmt::Debug for CopyDir {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.debug_struct("CopyDir")
-//             .field("source", &self.source)
-//             .field("path", &self.path)
-//             .finish()
-//     }
-// }
 
 impl CopyDir {
     pub fn new<P: AsRef<Path>>(source: P, path: P, filters: Filters) -> Self {
@@ -83,12 +100,6 @@ impl CopyDir {
     }
 }
 
-// impl PartialEq for CopyDir {
-//     fn eq(&self, other: &Self) -> bool {
-//         self.source == other.source
-//     }
-// }
-
 impl Generate for CopyDir {
     fn register(&self, resource: ResourceRef) -> DelayedRegistration {
         let source = self.source.clone();
@@ -97,7 +108,7 @@ impl Generate for CopyDir {
 
         Box::new(move || {
             let filter = build_filter(filters);
-            walkdir::WalkDir::new(source.clone())
+            Ok(walkdir::WalkDir::new(source.clone())
                 .into_iter()
                 .filter_map(|e| e.ok())
                 .filter_map(|e| {
@@ -119,8 +130,13 @@ impl Generate for CopyDir {
                 .map(|relative| (source.join(&relative), path.join(&relative)))
                 .map(|(source, path)| CopyFile::new(source, path))
                 .map(|file| Rc::new(RefCell::new(file)))
-                .map(|object| Registration::Object(object))
-                .collect()
+                .map(|object| {
+                    Registration::Nonterminal(NonterminalRegistration::DependUnique(
+                        resource.clone(),
+                        object,
+                    ))
+                })
+                .collect())
         })
     }
 

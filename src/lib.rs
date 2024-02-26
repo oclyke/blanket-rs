@@ -1,4 +1,5 @@
 pub mod resource;
+pub mod registration;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -6,12 +7,37 @@ use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use log::{error, trace};
 use topologic::AcyclicDependencyGraph;
 
+use registration::{DelayedRegistration, NonterminalRegistration, Registration, TerminalRegistration};
+
+/// The maximum recursion depth for delayed registrations.
 const MAX_RECURSION: usize = 1024;
 
+/// An object that can be built.
+pub trait Generate {
+    /// Registers the object with the builder.
+    /// Uses a delayed registration which is evaluated lazily at build time.
+    fn register(&self, resource: ResourceRef) -> DelayedRegistration;
+
+    /// Generate the object.
+    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>>;
+
+    /// Returns true if the object is equal to the other object.
+    /// Used to allow output location sharing for compatible objects.
+    /// Generally this should return false unless `other` can be downcast to
+    /// `Self`.
+    fn equals(&self, _other: ObjectRef) -> bool {
+        false
+    }
+}
+
+/// A reference to a `Generate` object.
 type ObjectRef = Rc<RefCell<dyn Generate>>;
 
+/// A resource.
+/// Wraps an object and provides a unique identifier.
 #[derive(Clone)]
 pub struct Resource {
     id: u64,
@@ -32,65 +58,12 @@ impl PartialEq for Resource {
 
 impl Eq for Resource {}
 
+/// A reference to a `Resource`.
 pub type ResourceRef = Rc<RefCell<Resource>>;
 
-pub type DelayedRegistration = Box<dyn FnOnce() -> Vec<Registration>>;
-
-pub enum Registration {
-    /// Nonterminal types
-    /// A nonterminal resource will be iteratively expanded into terminal resources.
-    // A registration that is not yet ready to be registered.
-    Delayed(DelayedRegistration),
-
-    // An Object was created in place and needs to be registered.
-    // The Object has not been registered yet.
-    Object(ObjectRef),
-
-    /// Terminal types
-    // A terminal resource is one which has been fully registered.
-    // It has no further dependencies.
-
-    // A dependency on a resource that has already been registered.
-    Dependency(ResourceRef, ResourceRef),
-
-    // A Concrete resource must reserve a path in the output directory.
-    Concrete(ResourceRef, PathBuf),
-
-    // A Virtual resource is a terminal resource which does not reserve a path in the output directory.
-    Virtual(),
-}
-
-impl std::fmt::Debug for Registration {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Registration::Delayed(_) => write!(f, "Delayed"),
-            Registration::Object(_) => write!(f, "Object"),
-            Registration::Dependency(from, to) => write!(
-                f,
-                "Dependency: {:?} -> {:?}",
-                from.borrow().id,
-                to.borrow().id
-            ),
-            Registration::Concrete(resource, path) => {
-                write!(f, "Terminal: {:?} at '{:?}'", resource.borrow().id, path)
-            }
-            Registration::Virtual() => write!(f, "Virtual"),
-        }
-    }
-}
-
-/// A resource that can be built.
-pub trait Generate {
-    /// Registers the resource with the builder.
-    /// Uses a delayed registration which is evaluated lazily at build time.
-    fn register(&self, resource: ResourceRef) -> DelayedRegistration;
-
-    /// Generate the resource.
-    fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>>;
-}
-
+/// A resource generator.
 pub struct Generator {
-    user_registrations: Vec<DelayedRegistration>,
+    registrations: Vec<DelayedRegistration>,
     resources: HashMap<u64, ResourceRef>,
     next_dependency_id: u64,
     concrete_resources: HashMap<PathBuf, ResourceRef>,
@@ -99,13 +72,28 @@ pub struct Generator {
 
 impl Generator {
     pub fn new() -> Self {
+        trace!("Generator::new()");
         Self {
-            user_registrations: vec![],
+            registrations: vec![],
             resources: HashMap::new(),
             next_dependency_id: 0,
             concrete_resources: HashMap::new(),
             dependency_graph: AcyclicDependencyGraph::new(),
         }
+    }
+
+    /// Require a resource to be built.
+    /// This is the user's primary method of interacting with the builder.
+    pub fn require<T: Generate + 'static>(&mut self, object: T) -> ResourceRef {
+        trace!("Generator::require()");
+
+        // Create the resource.
+        let resource = self.create_resource_from_object(object);
+
+        // Add the user's registration.
+        let delayed = resource.borrow().object.borrow().register(resource.clone());
+        self.registrations.push(delayed);
+        resource
     }
 
     /// Create a resource and add it to the list of available resources.
@@ -114,33 +102,57 @@ impl Generator {
     ///
     /// Returns the reference to the new resource.
     pub fn create_resource_from_object<T: Generate + 'static>(&mut self, object: T) -> ResourceRef {
+        trace!("Generator::create_resource_from_object()");
         let object = Rc::new(RefCell::new(object));
         self.create_resource_from_object_reference(object)
     }
 
-    /// Require a resource to be built.
-    /// This is the user's primary method of interacting with the builder.
-    pub fn require<T: Generate + 'static>(&mut self, object: T) -> ResourceRef {
-        // Create the resource.
-        let resource = self.create_resource_from_object(object);
-
-        // Add the user's registration.
-        let delayed_registration = resource.borrow().object.borrow().register(resource.clone());
-        self.user_registrations.push(delayed_registration);
-        resource
-    }
-
-    pub fn add_dependency(&mut self, resource: ResourceRef, dependency: ResourceRef) {
-        self.dependency_graph
-            .depend_on(resource.borrow().id, dependency.borrow().id);
+    pub fn add_dependency(
+        &mut self,
+        resource: ResourceRef,
+        dependency: ResourceRef,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        match self
+            .dependency_graph
+            .depend_on(resource.borrow().id, dependency.borrow().id)
+        {
+            Ok(_) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
     }
 
     pub fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        trace!("Generator::generate()");
+
         // Expand user registrations into terminal registrations.
-        let terminals = self.expand_user_registrations()?;
+        let mut terminals = vec![];
+        while let Some(delayed) = self.registrations.pop() {
+            let expanded = self.expand_registrations(delayed()?)?;
+            terminals.extend(expanded);
+        }
 
         // Register concrete resources.
-        self.register_concrete_resources(terminals)?;
+        for registration in terminals {
+            match registration {
+                Registration::Nonterminal(_) => {
+                    let message =
+                        "Encountered unexpected nonterminal registration after expansion.";
+                    error!("{}", message);
+                    return Err(message.into());
+                }
+                Registration::Terminal(terminal) => {
+                    match terminal {
+                        TerminalRegistration::Virtual(_) => {
+                            // do nothing
+                        }
+                        TerminalRegistration::Concrete(resource, path) => {
+                            // register the concrete resource
+                            self.add_concrete_resource(resource, path)?;
+                        }
+                    }
+                }
+            }
+        }
 
         // Perform a topological sort on the dependency graph.
         // Generate the dependencies in order.
@@ -155,9 +167,8 @@ impl Generator {
         }
 
         // Generate the concrete resources.
-        for (path, resource) in &self.concrete_resources {
+        for (_path, resource) in &self.concrete_resources {
             let resource = resource.borrow();
-            let path = path.clone();
             resource.object.borrow_mut().generate()?;
         }
 
@@ -167,6 +178,8 @@ impl Generator {
     /// Add an existing object as a resource.
     /// Does not return the resource reference, as the caller should already have it.
     fn create_resource_from_object_reference(&mut self, object: ObjectRef) -> ResourceRef {
+        trace!("Generator::create_resource_from_object_reference()");
+
         let resource = Resource {
             id: self.next_dependency_id,
             object,
@@ -178,119 +191,110 @@ impl Generator {
         reference
     }
 
-    /// Expands the user registrations into terminal registrations.
-    /// Terminal registrations are added to the resources map.
-    fn expand_user_registrations(
+    /// Expand user registrations into terminal registrations.
+    fn expand_registrations(
         &mut self,
+        registrations: Vec<Registration>,
     ) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
-        // Expands a vector of registrations into a vector of terminal registrations recursively.
-        fn expand_registrations_recurse(
-            recursion_remaining: usize,
+        // Recursive function to expand the registrations.
+        fn expand_registrations_recursive(
+            recurse: usize,
             generator: &mut Generator,
             registrations: Vec<Registration>,
-        ) -> Vec<Registration> {
-            let recursion_remaining = recursion_remaining - 1;
-            if recursion_remaining == 0 {
-                panic!("Recursion limit reached while expanding registrations.");
+        ) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+            if recurse == 0 {
+                return Err("Maximum recursion depth reached.".into());
             }
+            let recurse = recurse - 1;
+            let mut collected = vec![];
 
-            let mut expanded = vec![];
             for registration in registrations {
-                println!("registration: {:?}", registration);
-
                 match registration {
-                    /// Nonterminal types
-                    Registration::Delayed(delayed_registration) => {
-                        expanded.extend(expand_registrations_recurse(
-                            recursion_remaining,
-                            generator,
-                            delayed_registration(),
-                        ));
-                    }
-                    Registration::Object(object) => {
-                        let resource =
-                            generator.create_resource_from_object_reference(object.clone());
-                        let delayed_registration = object.borrow().register(resource.clone());
-                        expanded.extend(expand_registrations_recurse(
-                            recursion_remaining,
-                            generator,
-                            delayed_registration(),
-                        ));
-                    }
-
-                    /// Terminal types
-                    Registration::Dependency(from, to) => {
-                        generator.add_dependency(from, to);
-                        // drop the registration
-                    }
-                    Registration::Concrete(resource, path) => {
-                        expanded.push(Registration::Concrete(resource, path));
-                    }
-                    Registration::Virtual() => {
-                        expanded.push(Registration::Virtual());
+                    Registration::Nonterminal(nonterminal) => match nonterminal {
+                        NonterminalRegistration::Delayed(delayed) => {
+                            let expanded =
+                                expand_registrations_recursive(recurse, generator, delayed()?)?;
+                            collected.extend(expanded);
+                        }
+                        NonterminalRegistration::DependUnique(resource, object) => {
+                            let unique = generator.create_resource_from_object_reference(object);
+                            let delayed = unique.borrow().object.borrow().register(unique.clone());
+                            let expanded =
+                                expand_registrations_recursive(recurse, generator, delayed()?)?;
+                            generator.add_dependency(resource, unique)?;
+                            collected.extend(expanded);
+                        }
+                        NonterminalRegistration::DependShared(resource, shared) => {
+                            generator.add_dependency(resource, shared)?;
+                        }
+                    },
+                    Registration::Terminal(terminal) => {
+                        collected.push(Registration::Terminal(terminal));
                     }
                 }
             }
-            expanded
+
+            Ok(collected)
         }
 
-        // Loop over the user registrations and expand them into an acculator.
-        let mut terminal_registrations = vec![];
-        while let Some(delayed_registration) = self.user_registrations.pop() {
-            let registrations = delayed_registration();
-            terminal_registrations.extend(expand_registrations_recurse(
-                MAX_RECURSION,
-                self,
-                registrations,
-            ));
-        }
-        Ok(terminal_registrations)
+        // Expand the registrations.
+        let terminals = expand_registrations_recursive(MAX_RECURSION, self, registrations)?;
+        Ok(terminals)
     }
 
-    fn register_concrete_resources(
+    /// Add a concrete resource to the generator.
+    /// Returns Ok(()) if the resource is added successfully.
+    /// Returns an error if the resource already exists at the path and is not equal to the new resource.
+    fn add_concrete_resource(
         &mut self,
-        terminals: Vec<Registration>,
+        resource: ResourceRef,
+        path: PathBuf,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        for registration in terminals {
-            match registration {
-                Registration::Virtual() => {
-                    // do nothing
-                }
-                Registration::Concrete(resource, path) => {
-                    if self.concrete_resources.contains_key(&path) {
-                        return Err(
-                            format!("Resource already registered at path: {:?}", path).into()
-                        );
-                    }
-
-                    println!("registering concrete resource: {:?}", path);
-
-                    self.concrete_resources.insert(path, resource);
-                }
-                _ => {
+        match self.concrete_resources.get(&path) {
+            Some(existing) => {
+                if !resource
+                    .borrow()
+                    .object
+                    .borrow()
+                    .equals(existing.borrow().object.clone())
+                {
                     return Err(
-                        "Encountered unexpected nonterminal registration after expansion.".into(),
-                    )
+                        format!("Concrete resource already exists at path: {:?}", path).into(),
+                    );
                 }
             }
+            None => {}
         }
+        self.concrete_resources.insert(path, resource);
         Ok(())
     }
 }
 
+/// Tests.
 #[cfg(test)]
 mod tests {
-    use crate::resource;
-
     use super::*;
     use std::path::{Path, PathBuf};
 
     struct Mock {
+        // path to the resource.
+        // if Some the resource is concrete.
         path: Option<PathBuf>,
-        content: Option<String>,
-        shared: Option<(Rc<RefCell<Mock>>, ResourceRef)>,
 
+        // content of the resource.
+        content: Option<String>,
+
+        // generated content.
+        // after call to generate() Mock.content == Mock.generated.
         generated: Option<String>,
+
+        // a unique resource.
+        // represents a resource created in-place by the mock resource.
+        unique: Option<Rc<RefCell<Mock>>>,
+
+        // a shared resource and its reference.
+        // represents a resource created externally and used by the mock resource.
+        shared: Option<(Rc<RefCell<Mock>>, ResourceRef)>,
     }
 
     #[derive(Clone)]
@@ -298,6 +302,7 @@ mod tests {
         path: Option<PathBuf>,
         content: Option<String>,
         shared: Option<(Rc<RefCell<Mock>>, ResourceRef)>,
+        unique: Option<Rc<RefCell<Mock>>>,
     }
 
     impl MockBuilder {
@@ -305,6 +310,7 @@ mod tests {
             Self {
                 path: None,
                 content: None,
+                unique: None,
                 shared: None,
             }
         }
@@ -316,6 +322,10 @@ mod tests {
             self.content = Some(content);
             self
         }
+        fn unique(mut self, unique: Mock) -> Self {
+            self.unique = Some(Rc::new(RefCell::new(unique)));
+            self
+        }
         fn shared(mut self, shared: (Rc<RefCell<Mock>>, ResourceRef)) -> Self {
             self.shared = Some(shared);
             self
@@ -324,6 +334,7 @@ mod tests {
             Mock {
                 path: self.path,
                 content: self.content,
+                unique: self.unique,
                 shared: self.shared,
 
                 generated: None,
@@ -334,37 +345,57 @@ mod tests {
     impl Generate for Mock {
         fn register(&self, resource: ResourceRef) -> DelayedRegistration {
             let path = self.path.clone();
+            let unique = self.unique.clone();
             let shared = self.shared.clone();
+
+            let resource = resource.clone();
             Box::new(move || {
                 let mut registrations = vec![];
+
+                // Add the unique resource as a dependency.
+                match unique {
+                    None => {}
+                    Some(unique) => {
+                        registrations.push(Registration::Nonterminal(
+                            NonterminalRegistration::DependUnique(resource.clone(), unique.clone()),
+                        ));
+                    }
+                }
 
                 // Add the shared resource as a dependency.
                 match shared {
                     None => {}
-                    Some((object, refrence)) => {
-                        registrations.push(Registration::Dependency(resource.clone(), refrence));
+                    Some((_object, reference)) => {
+                        registrations.push(Registration::Nonterminal(
+                            NonterminalRegistration::DependShared(resource.clone(), reference),
+                        ));
                     }
                 }
 
-                // Add a Virtual or Concrete registration depending on presence of a path.
-                let registration = match path {
-                    None => Registration::Virtual(),
-                    Some(path) => Registration::Concrete(resource.clone(), path),
-                };
-                registrations.push(registration);
+                // Add the concrete resource.
+                match path {
+                    None => {}
+                    Some(path) => {
+                        registrations.push(Registration::Terminal(TerminalRegistration::Concrete(
+                            resource.clone(),
+                            path,
+                        )));
+                    }
+                }
 
-                registrations
+                return Ok(registrations);
             })
         }
         fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+            // copy content to generated
             match self.content.clone() {
                 None => {}
                 Some(content) => {
-                    println!("generating mock content: {:?}", content);
                     self.generated = Some(content.clone());
                 }
             }
 
+            // check content generated in the shared resource
             match self.shared.clone() {
                 None => {}
                 Some((object, _)) => match object.borrow().generated.clone() {
@@ -397,14 +428,12 @@ mod tests {
     }
 
     mod test_generator {
-        use std::borrow::Borrow;
-
         use super::*;
 
         #[test]
         fn test_new() {
             let generator = Generator::new();
-            assert_eq!(generator.user_registrations.len(), 0);
+            assert_eq!(generator.registrations.len(), 0);
             assert_eq!(generator.resources.is_empty(), true);
         }
 
@@ -416,21 +445,21 @@ mod tests {
             // first registration
             let mock = mocker.clone().path(PathBuf::from("/some/path")).build();
             generator.require(mock);
-            assert_eq!(generator.user_registrations.len(), 1);
+            assert_eq!(generator.registrations.len(), 1);
             assert_eq!(generator.resources.len(), 1);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
             // second dependency
             let mock = mocker.clone().path(PathBuf::from("/another/path")).build();
             generator.require(mock);
-            assert_eq!(generator.user_registrations.len(), 2);
+            assert_eq!(generator.registrations.len(), 2);
             assert_eq!(generator.resources.len(), 2);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
             // expand registrations
             let result = generator.generate();
             assert!(result.is_ok());
-            assert_eq!(generator.user_registrations.len(), 0);
+            assert_eq!(generator.registrations.len(), 0);
             assert_eq!(generator.resources.len(), 2);
             assert_eq!(generator.concrete_resources.len(), 2);
         }
@@ -443,14 +472,14 @@ mod tests {
             // add the first mock resource
             let mock = MockBuilder::new().path(REGISTRATION_PATH).build();
             generator.require(mock);
-            assert_eq!(generator.user_registrations.len(), 1);
+            assert_eq!(generator.registrations.len(), 1);
             assert_eq!(generator.resources.len(), 1);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
             // adding a second resource succeeds initially
             let unique_mock = MockBuilder::new().path(REGISTRATION_PATH).build();
             generator.require(unique_mock);
-            assert_eq!(generator.user_registrations.len(), 2);
+            assert_eq!(generator.registrations.len(), 2);
             assert_eq!(generator.resources.len(), 2);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
@@ -460,7 +489,36 @@ mod tests {
         }
 
         #[test]
-        fn test_common_resource() {
+        fn test_unique_resource() {
+            let mut generator = Generator::new();
+            let mocker = MockBuilder::new();
+
+            // a common resource
+            let common = mocker.clone().content(String::from("shared")).build();
+            assert_eq!(generator.registrations.len(), 0);
+            assert_eq!(generator.resources.len(), 0);
+            assert_eq!(generator.concrete_resources.is_empty(), true);
+
+            // a resource that depends on the common resource
+            let dependent = mocker
+                .clone()
+                .unique(common)
+                .path("some/concrete/path")
+                .build();
+            generator.require(dependent);
+            assert_eq!(generator.registrations.len(), 1);
+            assert_eq!(generator.resources.len(), 1);
+            assert_eq!(generator.concrete_resources.is_empty(), true);
+
+            let result = generator.generate();
+            assert!(result.is_ok());
+            assert_eq!(generator.registrations.len(), 0);
+            assert_eq!(generator.resources.len(), 2);
+            assert_eq!(generator.concrete_resources.len(), 1);
+        }
+
+        #[test]
+        fn test_shared_resource() {
             let mut generator = Generator::new();
             let mocker = MockBuilder::new();
 
@@ -468,7 +526,7 @@ mod tests {
             let common = mocker.clone().content(String::from("shared")).build();
             let object = Rc::new(RefCell::new(common));
             let reference = generator.create_resource_from_object_reference(object.clone());
-            assert_eq!(generator.user_registrations.len(), 0);
+            assert_eq!(generator.registrations.len(), 0);
             assert_eq!(generator.resources.len(), 1);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
@@ -479,13 +537,13 @@ mod tests {
                 .path("some/concrete/path")
                 .build();
             generator.require(dependent);
-            assert_eq!(generator.user_registrations.len(), 1);
+            assert_eq!(generator.registrations.len(), 1);
             assert_eq!(generator.resources.len(), 2);
             assert_eq!(generator.concrete_resources.is_empty(), true);
 
             let result = generator.generate();
             assert!(result.is_ok());
-            assert_eq!(generator.user_registrations.len(), 0);
+            assert_eq!(generator.registrations.len(), 0);
             assert_eq!(generator.resources.len(), 2);
             assert_eq!(generator.concrete_resources.len(), 1);
         }

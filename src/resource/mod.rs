@@ -1,5 +1,5 @@
 mod copy;
-// mod directory;
+mod directory;
 
 pub use copy::{CopyDir, CopyFile};
-// pub use directory::Directory;
+pub use directory::Directory;

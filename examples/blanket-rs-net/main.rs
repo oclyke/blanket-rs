@@ -13,6 +13,7 @@ use blanket_rs::{
 };
 
 fn main() {
+    env_logger::init();
     run().expect("Expected to exit successfully");
 }
 
