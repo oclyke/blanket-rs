@@ -57,10 +57,23 @@ impl Generator {
 
     /// Require an object to be built via reference.
     /// Used internally to handle recursive registration.
-    fn require_reference(
+    pub fn require_reference(
         &mut self,
         reference: Rc<RefCell<dyn Generate>>,
     ) -> Result<Rc<RefCell<Node>>, Box<dyn std::error::Error>> {
+        self.require_reference_recursive(0, reference)
+    }
+
+    fn require_reference_recursive(
+        &mut self,
+        depth: usize,
+        reference: Rc<RefCell<dyn Generate>>,
+    ) -> Result<Rc<RefCell<Node>>, Box<dyn std::error::Error>> {
+        if depth > MAX_RECURSION {
+            return Err("maximum recursion depth exceeded".into());
+        }
+        let depth = depth + 1;
+
         let node = self.nodes.add_reference(reference.clone());
         let id = node.borrow().id();
         let registrations = reference.borrow().register()?;
@@ -71,11 +84,13 @@ impl Generator {
                     self.add_dependency(id, 0)?;
                 }
                 Registration::RequireUnique(unique) => {
-                    let unique_node = self.require_reference(unique)?;
+                    let unique_node = self.require_reference_recursive(depth, unique)?;
                     self.add_dependency(id, unique_node.borrow().id())?;
                 }
                 Registration::RequireShared(shared) => {
-                    self.add_dependency(id, shared.borrow().id())?;
+                    let object = shared.borrow().object();
+                    let shared_node = self.require_reference_recursive(depth, object)?;
+                    self.add_dependency(id, shared_node.borrow().id())?;
                 }
                 Registration::ReservePath(path) => match self.paths.insert(path.clone(), id) {
                     None => {}

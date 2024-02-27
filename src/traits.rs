@@ -1,4 +1,3 @@
-use crate::node::NodeId;
 use crate::registration::Registration;
 
 use std::any::Any;

@@ -1,4 +1,3 @@
-use crate::registration::Registration;
 use crate::traits::Generate;
 
 use std::cell::RefCell;
@@ -20,6 +19,10 @@ impl Node {
 
     pub fn id(&self) -> NodeId {
         self.id
+    }
+
+    pub fn object(&self) -> Rc<RefCell<dyn Generate>> {
+        self.object.clone()
     }
 }
 
@@ -87,6 +90,7 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::registration::Registration;
 
     #[derive(Debug)]
     struct Mock {}
@@ -113,7 +117,7 @@ mod tests {
         #[test]
         fn test_add_reference() {
             let mut manager = Manager::new();
-            let reference = manager.add_reference(Rc::new(RefCell::new(Mock {})));
+            let _reference = manager.add_reference(Rc::new(RefCell::new(Mock {})));
             assert_eq!(manager.next_id, 1);
             assert_eq!(manager.map.len(), 1);
         }
