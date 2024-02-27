@@ -16,6 +16,10 @@ exclude = [
 name = "basic"
 path = "examples/basic/main.rs"
 
+[[example]]
+name = "reverse"
+path = "examples/experimental/reverse/main.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

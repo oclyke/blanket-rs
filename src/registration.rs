@@ -10,6 +10,8 @@ pub enum Registration {
     RequireUnique(Rc<RefCell<dyn Generate>>),
     RequireShared(Rc<RefCell<Node>>),
     ReservePath(PathBuf),
+    PrecedeUnique(Rc<RefCell<dyn Generate>>),
+    PrecedeShared(Rc<RefCell<Node>>),
 }
 
 impl std::fmt::Debug for Registration {
@@ -19,6 +21,8 @@ impl std::fmt::Debug for Registration {
             Registration::RequireUnique(..) => write!(f, "RequireUnique"),
             Registration::RequireShared(..) => write!(f, "RequireShared"),
             Registration::ReservePath(path) => write!(f, "ReservePath({:?})", path),
+            Registration::PrecedeUnique(..) => write!(f, "PrecedUnique"),
+            Registration::PrecedeShared(..) => write!(f, "PrecedShared"),
         }
     }
 }

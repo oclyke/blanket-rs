@@ -17,5 +17,4 @@ Cargo.lock
 .DS_Store
 
 # Example output
-examples/basic/site-out
-examples/blanket-rs-net/site-out
+examples/**/site-out

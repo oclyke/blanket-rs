@@ -8,10 +8,11 @@ mod root;
 mod traits;
 
 pub use registration::Registration;
+pub use traits::Generate;
+pub use node::{Node, NodeId};
 
-use node::{Manager as NodeManager, Node, NodeId};
+use node::Manager as NodeManager;
 use root::Root;
-use traits::Generate;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -109,6 +110,15 @@ impl Generator {
                         }
                     }
                 },
+                Registration::PrecedeUnique(unique) => {
+                    let unique_node = self.require_reference_recursive(depth, unique)?;
+                    self.add_dependency(unique_node.borrow().id(), id)?;
+                }
+                Registration::PrecedeShared(shared) => {
+                    let object = shared.borrow().object();
+                    let shared_node = self.require_reference_recursive(depth, object)?;
+                    self.add_dependency(shared_node.borrow().id(), id)?;
+                }
             }
         }
 

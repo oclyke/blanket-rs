@@ -5,7 +5,6 @@ impl Generate for String {
         Ok(vec![])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("generated string resource: {:?}", self.clone());
         Ok(())
     }
 }
