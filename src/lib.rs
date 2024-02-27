@@ -77,7 +77,7 @@ impl Generator {
 
         let node = self.nodes.add_reference(reference.clone());
         let id = node.borrow().id();
-        let registrations = reference.borrow().register()?;
+        let registrations = reference.borrow_mut().register()?;
 
         for registration in registrations {
             match registration {
@@ -258,7 +258,7 @@ mod tests {
             self.equivalent
         }
 
-        fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+        fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
             let mut registrations = vec![];
 
             // Add the unique resource as a dependency.

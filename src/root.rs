@@ -5,7 +5,7 @@ use crate::traits::Generate;
 pub struct Root {}
 
 impl Generate for Root {
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         Ok(vec![])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {

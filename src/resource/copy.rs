@@ -37,7 +37,7 @@ impl PartialEq for CopyFile {
 }
 
 impl Generate for CopyFile {
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         let parent = match self.path.parent() {
             Some(parent) => parent.to_path_buf(),
             None => {
@@ -86,7 +86,7 @@ impl CopyDir {
 }
 
 impl Generate for CopyDir {
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         let filter = build_filter(self.filters.clone());
         Ok(walkdir::WalkDir::new(self.source.clone())
             .into_iter()

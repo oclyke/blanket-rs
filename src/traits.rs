@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub trait Generate: Any + std::fmt::Debug {
     /// Registers the object with the builder.
     /// Uses a delayed registration which is evaluated lazily at build time.
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>>;
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>>;
 
     /// Generate the object.
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>>;

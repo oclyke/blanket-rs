@@ -34,7 +34,7 @@ impl Generate for Directory {
             false
         }
     }
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         Ok(vec![Registration::ReservePath(self.path.clone())])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
