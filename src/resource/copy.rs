@@ -5,18 +5,9 @@ use std::rc::Rc;
 
 use log::warn;
 
-use crate::{
-    Generate,
-    ResourceRef,
-    registration::{
-        DelayedRegistration, NonterminalRegistration, Registration,
-        TerminalRegistration,
-    },
-};
+use crate::{resource::Directory, Generate, Registration};
 
-use crate::resource::Directory;
-
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Filters {
     exclude: Option<Vec<Regex>>,
     include: Option<Vec<Regex>>,
@@ -46,33 +37,22 @@ impl PartialEq for CopyFile {
 }
 
 impl Generate for CopyFile {
-    fn register(&self, resource: ResourceRef) -> DelayedRegistration {
-        let path = self.path.clone();
-        Box::new(move || {
-            let parent = match path.parent() {
-                Some(parent) => parent.to_path_buf(),
-                None => {
-                    warn!("path has no parent");
-                    return Err("path has no parent".into());
-                }
-            };
-            let directory = Rc::new(RefCell::new(Directory::new(parent)));
-            Ok(vec![
-                Registration::Nonterminal(NonterminalRegistration::DependUnique(
-                    resource.clone(),
-                    directory.clone(),
-                )),
-                Registration::Terminal(TerminalRegistration::Concrete(
-                    resource.clone(),
-                    path.clone(),
-                )),
-            ])
-        })
+    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+        let parent = match self.path.parent() {
+            Some(parent) => parent.to_path_buf(),
+            None => {
+                warn!("path has no parent");
+                return Err("path has no parent".into());
+            }
+        };
+        let directory = Rc::new(RefCell::new(Directory::new(parent)));
+        Ok(vec![
+            Registration::RequireUnique(directory.clone()),
+            Registration::ReservePath(self.path.clone()),
+        ])
     }
 
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("copying file: {:?} to {:?}", self.source, self.path);
-
         let CopyFile { source, path, .. } = self;
         if source.is_dir() {
             return Err("source is a directory".into());
@@ -84,6 +64,7 @@ impl Generate for CopyFile {
     }
 }
 
+#[derive(Debug)]
 pub struct CopyDir {
     source: PathBuf,
     path: PathBuf,
@@ -105,43 +86,32 @@ impl CopyDir {
 }
 
 impl Generate for CopyDir {
-    fn register(&self, resource: ResourceRef) -> DelayedRegistration {
-        let source = self.source.clone();
-        let path = self.path.clone();
-        let filters = self.filters.clone();
-
-        Box::new(move || {
-            let filter = build_filter(filters);
-            Ok(walkdir::WalkDir::new(source.clone())
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter_map(|e| {
-                    let path = e.path();
-                    if !path.is_file() {
-                        return None;
-                    }
-                    let relative = match path.strip_prefix(source.clone()) {
-                        Ok(rel) => rel.to_path_buf(),
-                        Err(_) => return None,
-                    };
-                    let relative_str = match relative.to_str() {
-                        Some(path_str) => path_str,
-                        None => return None,
-                    };
-                    Some(relative_str.to_string())
-                })
-                .filter(filter.as_ref())
-                .map(|relative| (source.join(&relative), path.join(&relative)))
-                .map(|(source, path)| CopyFile::new(source, path))
-                .map(|file| Rc::new(RefCell::new(file)))
-                .map(|object| {
-                    Registration::Nonterminal(NonterminalRegistration::DependUnique(
-                        resource.clone(),
-                        object,
-                    ))
-                })
-                .collect())
-        })
+    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+        let filter = build_filter(self.filters.clone());
+        Ok(walkdir::WalkDir::new(self.source.clone())
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter_map(|e| {
+                let path = e.path();
+                if !path.is_file() {
+                    return None;
+                }
+                let relative = match path.strip_prefix(self.source.clone()) {
+                    Ok(rel) => rel.to_path_buf(),
+                    Err(_) => return None,
+                };
+                let relative_str = match relative.to_str() {
+                    Some(path_str) => path_str,
+                    None => return None,
+                };
+                Some(relative_str.to_string())
+            })
+            .filter(filter.as_ref())
+            .map(|relative| (self.source.join(&relative), self.path.join(&relative)))
+            .map(|(source, path)| CopyFile::new(source, path))
+            .map(|file| Rc::new(RefCell::new(file)))
+            .map(|object| Registration::RequireUnique(object))
+            .collect())
     }
 
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {

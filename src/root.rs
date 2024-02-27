@@ -1,11 +1,14 @@
-use crate::{Generate, Registration};
+use crate::registration::Registration;
+use crate::traits::Generate;
 
-impl Generate for String {
+#[derive(Debug)]
+pub struct Root {}
+
+impl Generate for Root {
     fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         Ok(vec![])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("generated string resource: {:?}", self.clone());
         Ok(())
     }
 }

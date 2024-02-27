@@ -1,9 +1,9 @@
-use std::path::{Path, PathBuf};
-use std::any::Any;
+use crate::{Generate, Registration};
 
-use crate::{
-    DelayedRegistration, Generate, ObjectRef, Registration, ResourceRef, TerminalRegistration,
-};
+use std::any::Any;
+use std::cell::RefCell;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
 #[derive(Debug)]
 pub struct Directory {
@@ -25,7 +25,7 @@ impl PartialEq for Directory {
 }
 
 impl Generate for Directory {
-    fn equals(&self, other: ObjectRef) -> bool {
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
         let borrowed = other.borrow();
         let any_ref = &*borrowed as &dyn Any;
         if let Some(specific) = any_ref.downcast_ref::<Directory>() {
@@ -34,13 +34,8 @@ impl Generate for Directory {
             false
         }
     }
-    fn register(&self, resource: ResourceRef) -> DelayedRegistration {
-        let path = self.path.clone();
-        Box::new(move || {
-            Ok(vec![Registration::Terminal(
-                TerminalRegistration::Concrete(resource, path),
-            )])
-        })
+    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+        Ok(vec![Registration::ReservePath(self.path.clone())])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Directory { path, .. } = self;
