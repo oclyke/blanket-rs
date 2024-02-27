@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::any::Any;
 
 use crate::{
     DelayedRegistration, Generate, ObjectRef, Registration, ResourceRef, TerminalRegistration,
@@ -25,13 +26,12 @@ impl PartialEq for Directory {
 
 impl Generate for Directory {
     fn equals(&self, other: ObjectRef) -> bool {
-        let any = &other as &dyn std::any::Any;
-        match any.downcast_ref::<Directory>() {
-            Some(other) => {
-                println!("comparing directories: {:?} == {:?}", self.path, other.path);
-                self.path == other.path
-            }
-            None => false,
+        let borrowed = other.borrow();
+        let any_ref = &*borrowed as &dyn Any;
+        if let Some(specific) = any_ref.downcast_ref::<Directory>() {
+            self.path == specific.path
+        } else {
+            false
         }
     }
     fn register(&self, resource: ResourceRef) -> DelayedRegistration {

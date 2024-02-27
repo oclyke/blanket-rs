@@ -19,6 +19,15 @@ fn main() {
 }
 ```
 
+**use the nightly compiler**
+blanket-rs uses the [`trait_upcasting`](https://github.com/rust-lang/rust/issues/65991) feature,
+which is currently only available on the nightly compiler.
+
+to use the nightly compiler, run the following command in your project directory:
+```sh
+rustup override set nightly
+```
+
 # why blanket-rs
 great question. there are a lot of options for static website generation in
 Rust - see [alternatives](#alternatives) - but for many use cases they are

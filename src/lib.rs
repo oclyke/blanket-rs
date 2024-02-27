@@ -1,3 +1,5 @@
+#![feature(trait_upcasting)]
+
 pub mod resource;
 pub mod registration;
 
@@ -6,6 +8,7 @@ use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::any::Any;
 
 use log::{error, trace};
 use topologic::AcyclicDependencyGraph;
@@ -16,7 +19,7 @@ use registration::{DelayedRegistration, NonterminalRegistration, Registration, T
 const MAX_RECURSION: usize = 1024;
 
 /// An object that can be built.
-pub trait Generate {
+pub trait Generate: Any {
     /// Registers the object with the builder.
     /// Uses a delayed registration which is evaluated lazily at build time.
     fn register(&self, resource: ResourceRef) -> DelayedRegistration;
@@ -107,6 +110,22 @@ impl Generator {
         self.create_resource_from_object_reference(object)
     }
 
+    /// Add an existing object as a resource.
+    /// Does not return the resource reference, as the caller should already have it.
+    pub fn create_resource_from_object_reference(&mut self, object: ObjectRef) -> ResourceRef {
+        trace!("Generator::create_resource_from_object_reference()");
+
+        let resource = Resource {
+            id: self.next_dependency_id,
+            object,
+        };
+        let reference = Rc::new(RefCell::new(resource));
+        self.resources
+            .insert(self.next_dependency_id, reference.clone());
+        self.next_dependency_id += 1;
+        reference
+    }
+
     pub fn add_dependency(
         &mut self,
         resource: ResourceRef,
@@ -173,22 +192,6 @@ impl Generator {
         }
 
         Ok(())
-    }
-
-    /// Add an existing object as a resource.
-    /// Does not return the resource reference, as the caller should already have it.
-    fn create_resource_from_object_reference(&mut self, object: ObjectRef) -> ResourceRef {
-        trace!("Generator::create_resource_from_object_reference()");
-
-        let resource = Resource {
-            id: self.next_dependency_id,
-            object,
-        };
-        let reference = Rc::new(RefCell::new(resource));
-        self.resources
-            .insert(self.next_dependency_id, reference.clone());
-        self.next_dependency_id += 1;
-        reference
     }
 
     /// Expand user registrations into terminal registrations.

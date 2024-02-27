@@ -6,8 +6,12 @@ use std::rc::Rc;
 use log::warn;
 
 use crate::{
-    DelayedRegistration, Generate, NonterminalRegistration, Registration, ResourceRef,
-    TerminalRegistration,
+    Generate,
+    ResourceRef,
+    registration::{
+        DelayedRegistration, NonterminalRegistration, Registration,
+        TerminalRegistration,
+    },
 };
 
 use crate::resource::Directory;
@@ -141,7 +145,6 @@ impl Generate for CopyDir {
     }
 
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("copying directory: {:?}", self.source);
         Ok(())
     }
 }
