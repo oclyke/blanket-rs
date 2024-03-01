@@ -75,7 +75,7 @@ struct Dir {
 }
 
 impl Generate for Dir {
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         let directory = Rc::new(RefCell::new(Directory::new(self.path.clone())));
         let mut registrations = vec![
             Registration::RequireUnique(directory)
@@ -108,7 +108,7 @@ struct Fil {
 }
 
 impl Generate for Fil {
-    fn register(&self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
         Ok(vec![])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
