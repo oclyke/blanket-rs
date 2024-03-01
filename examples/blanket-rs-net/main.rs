@@ -8,11 +8,12 @@
 use std::path::PathBuf;
 
 use blanket_rs::{
-    builder::Builder,
     resource::{CopyDir, CopyFile},
+    Generator,
 };
 
 fn main() {
+    env_logger::init();
     run().expect("Expected to exit successfully");
 }
 
@@ -22,7 +23,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let example_dir = PathBuf::from("examples/blanket-rs-net");
     let source = example_dir.join("site-content");
     let output = example_dir.join("site-out");
-    let mut builder = Builder::new();
+    let mut builder = Generator::new();
 
     // clear the output directory
     // prefer immutability over performance

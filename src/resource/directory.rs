@@ -1,19 +1,18 @@
+use crate::{Generate, Registration};
+
+use std::any::Any;
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
-use crate::builder::{Build, Builder, Node, Registration};
-
 #[derive(Debug)]
 pub struct Directory {
-    id: Option<u64>,
     path: PathBuf,
 }
 
 impl Directory {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
         Self {
-            id: None,
             path: path.as_ref().to_path_buf(),
         }
     }
@@ -25,32 +24,18 @@ impl PartialEq for Directory {
     }
 }
 
-impl Build for Directory {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-    fn equals(&self, other: Rc<RefCell<dyn Build>>) -> bool {
-        let other = other.borrow();
-        let any = other.as_any();
-        match any.downcast_ref::<Self>() {
-            Some(other) => {
-                self == other
-            }
-            None => false,
+impl Generate for Directory {
+    fn equals(&self, other: Rc<RefCell<dyn Generate>>) -> bool {
+        let borrowed = other.borrow();
+        let any_ref = &*borrowed as &dyn Any;
+        if let Some(specific) = any_ref.downcast_ref::<Directory>() {
+            self.path == specific.path
+        } else {
+            false
         }
     }
-    fn id(&self) -> Option<u64> {
-        None
-    }
-    fn register(&mut self, id: u64) -> Result<Registration, Box<dyn std::error::Error>> {
-        self.id = Some(id);
-        Ok(Registration::Concrete(self.path.clone()))
-    }
-    fn dependencies(
-        &mut self,
-        _builder: &mut Builder,
-    ) -> Result<Vec<Node>, Box<dyn std::error::Error>> {
-        Ok(vec![])
+    fn register(&mut self) -> Result<Vec<Registration>, Box<dyn std::error::Error>> {
+        Ok(vec![Registration::ReservePath(self.path.clone())])
     }
     fn generate(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let Directory { path, .. } = self;
