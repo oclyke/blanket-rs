@@ -2,28 +2,17 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use crate::{html::Render, Generate, Register, Registration};
+use crate::{html::Render, Generate};
 
 pub struct RenderFile {
     element: Rc<RefCell<dyn Render>>,
-    destination: PathBuf,
 }
 
 impl RenderFile {
-    pub fn new(destination: &PathBuf, element: Rc<RefCell<dyn Render>>) -> Self {
+    pub fn new(element: Rc<RefCell<dyn Render>>) -> Self {
         Self {
             element,
-            destination: destination.clone(),
         }
-    }
-}
-
-impl Register for RenderFile {
-    fn register(self) -> Result<Registration, Box<dyn std::error::Error>> {
-        Ok(Registration::Terminal {
-            path: self.destination.clone(),
-            generator: Rc::new(RefCell::new(self)),
-        })
     }
 }
 
