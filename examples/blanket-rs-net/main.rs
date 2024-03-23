@@ -8,8 +8,8 @@
 use std::path::PathBuf;
 
 use blanket_rs::{
-    builder::Builder,
-    resource::{CopyDir, CopyFile},
+    generator::{CopyDir, CopyFile},
+    Generator,
 };
 
 fn main() {
@@ -22,7 +22,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let example_dir = PathBuf::from("examples/blanket-rs-net");
     let source = example_dir.join("site-content");
     let output = example_dir.join("site-out");
-    let mut builder = Builder::new();
+
+    // create the generator
+    // use the allow filter to protect from writing above the output directory
+    let mut site = Generator::builder()
+        // .allow(vec![format!("{}/*", get_top_dir(&output)?).as_str()])
+        .allow(vec![format!("{}/*", output.to_string_lossy()).as_str()])
+        .build();
 
     // clear the output directory
     // prefer immutability over performance
@@ -34,21 +40,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     println!("done.");
 
     // register copied files
-    builder.require(CopyDir::builder(&source.join("assets"), &output.join("assets")).build())?;
-    builder.require(CopyFile::new(
-        source.join("index.html"),
-        output.join("index.html"),
+    site.require(CopyDir::builder(&source.join("assets"), &output.join("assets")).build())?;
+    site.require(CopyFile::new(
+        &source.join("index.html"),
+        &output.join("index.html"),
     ))?;
-    builder.require(CopyFile::new(
-        source.join("style.css"),
-        output.join("style.css"),
+    site.require(CopyFile::new(
+        &source.join("style.css"),
+        &output.join("style.css"),
     ))?;
-    builder.require(CopyFile::new(
-        source.join("reset.css"),
-        output.join("reset.css"),
+    site.require(CopyFile::new(
+        &source.join("reset.css"),
+        &output.join("reset.css"),
     ))?;
 
-    builder.generate()?;
+    println!("generating tagets:");
+    for target in site.targets() {
+        println!("  {:?}", target);
+    }
+    site.generate()?;
 
     println!("program end");
     Ok(())
