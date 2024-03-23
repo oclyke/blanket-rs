@@ -26,8 +26,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     // create the generator
     // use the allow filter to protect from writing above the output directory
     let mut site = Generator::builder()
-        // .allow(vec![format!("{}/*", get_top_dir(&output)?).as_str()])
-        .allow(vec![format!("{}/*", output.to_string_lossy()).as_str()])
+        .allow(vec![format!("{}/.*", output.to_string_lossy()).as_str()])
         .build();
 
     // clear the output directory
