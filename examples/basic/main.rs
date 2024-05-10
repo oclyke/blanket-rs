@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 
 use blanket_rs::{
-    generator::{CopyDir, CopyFile},
+    targets::{CopyDir, CopyFile},
     Generator,
 };
 
@@ -24,39 +24,28 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let output = example_dir.join("site-out");
     let mut site = Generator::new();
 
-    // clear the output directory
-    // prefer immutability over performance
-    // the directory tree will be assembled to replace the output directory
-    print!("removing output directory... ");
-    if output.exists() {
-        std::fs::remove_dir_all(&output)?;
-    }
-    println!("done.");
-
-    // register copied files
-    site.require(
+    // list of desired targets
+    site.add_target(CopyFile::new(
+        source.join("index.html"),
+        output.join("index.html"),
+    ));
+    site.add_target(CopyFile::new(
+        source.join("style.css"),
+        output.join("style.css"),
+    ));
+    site.add_target(CopyFile::new(
+        source.join("reset.css"),
+        output.join("reset.css"),
+    ));
+    site.add_targets(
         CopyDir::builder(&source.join("assets"), &output.join("assets"))
-            .include(vec![r".*\.png"])
-            .build(),
-    )?;
-    site.require(CopyFile::new(
-        &source.join("index.html"),
-        &output.join("index.html"),
-    ))?;
-    site.require(CopyFile::new(
-        &source.join("style.css"),
-        &output.join("style.css"),
-    ))?;
-    site.require(CopyFile::new(
-        &source.join("reset.css"),
-        &output.join("reset.css"),
-    ))?;
+            .include(vec![r".*/.*\.png"])
+            .build()
+            .targets(),
+    );
 
-    println!("generating tagets:");
-    for target in site.targets() {
-        println!("  {:?}", target);
-    }
-    site.generate()?;
+    // generate the site without caching
+    site.generate(blanket_rs::cache::NoCache {})?;
 
     println!("program end");
     Ok(())
