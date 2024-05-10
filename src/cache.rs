@@ -1,7 +1,5 @@
 use blake3::Hash as Blake3Hash;
-use blake3::Hasher as Blake3Hasher;
 use std::collections::HashMap;
-use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 /// Cache
