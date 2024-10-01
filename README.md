@@ -1,6 +1,8 @@
 # blanket-rs
 static generator
 
+> **HEADS UP**: I was getting ahead of myself with `blanket` and right now it mostly serves as a very restrictive pedantic scripting language that only allows one to copy files here and there. I have the intention, one day, to design a proper domain-specific build system following the guidance of [*build systems a la carte*](https://www.microsoft.com/en-us/research/uploads/prod/2018/03/build-systems.pdf) but for the time being I cannot reccomend using `blanket` - it is just not ready.
+
 to get started try the example: `cargo run --example basic`
 
 then go ahead and start using the library in your own project =D
